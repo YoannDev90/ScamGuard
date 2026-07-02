@@ -78,15 +78,16 @@ class Monitor(commands.Cog, name="Monitor"):
         if banned_match:
             await execute_actions("banned_image", message, result)
 
-        # ── Reactions (default indicator) ────────────────────────────
+        # ── Reactions ────────────────────────────────────────────────
         has_image_flag = bool(banned_match)
+        reactions_cfg = gc.get("reactions", {})
         try:
             if has_image_flag:
-                await message.add_reaction("\U0001f51e")
+                await message.add_reaction(reactions_cfg.get("banned_image", "\U0001f51e"))
             if result["is_scam"]:
-                await message.add_reaction("\U0001f6a8")
+                await message.add_reaction(reactions_cfg.get("scam", "\U0001f6a8"))
             elif result["score"] >= gc.get("score_warn", 30):
-                await message.add_reaction("\u26a0\ufe0f")
+                await message.add_reaction(reactions_cfg.get("suspicious", "\u26a0\ufe0f"))
         except discord.HTTPException:
             pass
 
@@ -212,7 +213,11 @@ class Monitor(commands.Cog, name="Monitor"):
         if gc.get("enable_report", True) and emoji == report_emoji and not any(r.me for r in msg.reactions if str(r.emoji) == report_emoji):
             await self._legacy_notify(msg, {"score": 0, "is_scam": False, "factors": [f"Reported by <@{payload.user_id}>"], "ocr_text": ""}, gc)
 
-        if emoji == "\u2705":
+        reactions_cfg = gc.get("reactions", {})
+        clear_emoji = reactions_cfg.get("clear", "\u2705")
+        alert_emoji = reactions_cfg.get("community_alert", "\U0001f6a8")
+
+        if emoji == clear_emoji:
             for r in msg.reactions:
                 if r.me:
                     async for u in r.users():
@@ -220,8 +225,8 @@ class Monitor(commands.Cog, name="Monitor"):
                             await r.remove(u)
                             break
 
-        if emoji == "\U0001f6a8":
-            count = sum(1 for r in msg.reactions if str(r.emoji) == "\U0001f6a8" and r.count > 1)
+        if emoji == alert_emoji:
+            count = sum(1 for r in msg.reactions if str(r.emoji) == alert_emoji and r.count > 1)
             if count >= gc.get("community_confirm_count", 3):
                 await self._legacy_notify(msg, {"score": 99, "is_scam": True, "factors": ["Community confirmed"], "ocr_text": ""}, gc)
 

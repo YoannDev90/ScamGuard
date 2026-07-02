@@ -59,6 +59,31 @@
   cooldown_seconds: 300, // Min seconds between alerts for the same user (5 min)
 
   // ------------------------------------------------------------------
+  // Reaction emojis — per-trigger reactions the bot adds to flagged messages
+  // ------------------------------------------------------------------
+  reactions: {
+    scam: "\u{1F6A8}", // 🚨
+    suspicious: "\u{26A0}\u{FE0F}", // ⚠️
+    banned_image: "\u{1F51E}", // 🔞
+    clear: "\u{2705}", // ✅  Used to clear bot reactions manually
+    community_alert: "\u{1F6A8}", // 🚨  Used for community confirm counting
+  },
+
+  // ------------------------------------------------------------------
+  // Embed colours — per-trigger colours for alert embeds (hex)
+  // ------------------------------------------------------------------
+  embed_colors: {
+    scam: 0xE74C3C,       // red
+    suspicious: 0xE67E22,  // orange
+    banned_image: 0x9B59B6, // purple
+    ok: 0x2ECC71,         // green
+    config: 0x3498DB,     // blue (config panels)
+  },
+
+  embed_dark_red_threshold: 70, // Score >= this → dark red embed instead of red
+  warn_message_default: "Votre message a été signalé.", // Default DM text for warn action
+
+  // ------------------------------------------------------------------
   // Community features
   // ------------------------------------------------------------------
   community_confirm_count: 3, // Number of alert reactions before auto-notify

@@ -63,19 +63,20 @@ class Core(commands.Cog, name="Core"):
         score = result["score"]
         is_scam = result["is_scam"]
 
+        ec = gc.get("embed_colors", {})
         if is_scam:
-            colour = discord.Colour.red()
+            colour = discord.Colour(ec.get("scam", 0xE74C3C))
             status = f"**SCAM** (score: {score})"
-        elif score >= 30:
-            colour = discord.Colour.orange()
+        elif score >= gc.get("score_warn", 30):
+            colour = discord.Colour(ec.get("suspicious", 0xE67E22))
             status = f"**Suspect** (score: {score})"
         else:
-            colour = discord.Colour.green()
+            colour = discord.Colour(ec.get("ok", 0x2ECC71))
             status = f"**OK** (score: {score})"
 
         embed = discord.Embed(title="Résultat d'analyse", colour=colour, timestamp=discord.utils.utcnow())
         embed.add_field(name="Statut", value=status, inline=False)
-        embed.add_field(name="Score", value=f"**{score}** / seuil 50", inline=True)
+        embed.add_field(name="Score", value=f"**{score}** / seuil {gc.get('score_alert', 50)}", inline=True)
         factors = result.get("factors", [])
         if factors:
             embed.add_field(name="Facteurs", value="\n".join(f"- `{f}`" for f in factors), inline=False)

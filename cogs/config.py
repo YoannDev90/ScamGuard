@@ -10,7 +10,6 @@ from discord import app_commands
 from discord.ext import commands
 from bot import config as global_cfg
 from core.config import get_guild_config, VersionManager, clear_guild_config_cache
-from cogs.actions import _build_alert_embed
 
 log = logging.getLogger("bot.config")
 
@@ -42,6 +41,7 @@ KNOWN_SETTINGS = [
     "log_channel_names", "alert_channel_id", "ping_role_id",
     "dm_author_on_alert", "dm_message_template", "auto_delete", "cooldown_seconds",
     "community_confirm_count", "report_emoji", "enable_report",
+    "reactions", "embed_colors", "embed_dark_red_threshold", "warn_message_default",
     "debug_mode", "logging_level",
 ]
 
@@ -119,13 +119,33 @@ class Config(commands.Cog, name="Config"):
         }
         set_text = "\n".join(f"- `{k}` → `{v}`" for k, v in settings_show.items())
 
+        reactions_cfg = gc.get("reactions", {})
+        react_text = (
+            f"scam: {reactions_cfg.get('scam', '🚨')}\n"
+            f"suspicious: {reactions_cfg.get('suspicious', '⚠️')}\n"
+            f"banned_img: {reactions_cfg.get('banned_image', '🔞')}\n"
+            f"clear: {reactions_cfg.get('clear', '✅')}"
+        ) if reactions_cfg else "Par défaut"
+
+        ec = gc.get("embed_colors", {})
+        embed_cfg = gc.get("embed_dark_red_threshold", 70)
+        colors_text = (
+            f"seuil foncé: {embed_cfg}\n"
+            f"scam: #{ec.get('scam', 0xE74C3C):06x}\n"
+            f"suspicious: #{ec.get('suspicious', 0xE67E22):06x}\n"
+            f"banned_img: #{ec.get('banned_image', 0x9B59B6):06x}"
+        ) if ec else "Par défaut"
+
+        ecfg = gc.get("embed_colors", {})
         embed = discord.Embed(
             title=f"Configuration — {interaction.guild.name}",
-            colour=discord.Colour.blue(),
+            colour=discord.Colour(ecfg.get("config", 0x3498DB)),
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name=f"Patterns ({len(patterns)})", value=f"```{pat_text[:900]}```", inline=False)
         embed.add_field(name=f"Actions ({sum(len(v) for v in actions.values())})", value=act_text[:1000] or "Aucune", inline=False)
+        embed.add_field(name="Réactions", value=react_text, inline=True)
+        embed.add_field(name="Couleurs embed", value=colors_text, inline=True)
         embed.add_field(name="Paramètres", value=set_text, inline=False)
         embed.set_footer(text=f"v{info['version']} • ID: {interaction.guild_id}")
         await interaction.followup.send(embed=embed, ephemeral=True)

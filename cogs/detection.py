@@ -35,9 +35,9 @@ class Detector:
             log.info("easyocr ready")
         return self._ocr
 
-    async def ocr_image(self, url: str, max_ocr_len: int = 2000) -> Optional[str]:
+    async def ocr_image(self, url: str, max_ocr_len: int = 2000, max_size: int = 5242880) -> Optional[str]:
         """Download image and extract text via OCR."""
-        data = await self._download(url)
+        data = await self._download(url, max_size)
         if data is None:
             return None
         log.debug("Running OCR on %s (%d bytes) ...", url, len(data))
@@ -121,9 +121,10 @@ class Detector:
 
         all_text = (message.content.strip() + "\n") if message.content.strip() else ""
         urls = await self._get_image_urls(message, gc)
+        max_size = gc.get("image_max_size", 5242880)
 
         for url in urls:
-            text = await self.ocr_image(url)
+            text = await self.ocr_image(url, max_size=max_size)
             if text:
                 result["ocr_text"] += text + "\n"
                 all_text += text + "\n"
@@ -167,14 +168,14 @@ class Detector:
 
     # ── Image helpers ────────────────────────────────────────────────
 
-    async def _download(self, url: str) -> Optional[bytes]:
+    async def _download(self, url: str, max_size: int = 5242880) -> Optional[bytes]:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status != 200:
                         return None
                     data = await resp.read()
-                    if len(data) > 5 * 1024 * 1024:
+                    if len(data) > max_size:
                         return None
                     return data
         except Exception:
