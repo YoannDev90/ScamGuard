@@ -6,3 +6,4 @@ Pillow>=10.0.0
 imagehash>=4.3.0
 whois>=0.9.0
 litellm>=1.0.0
+colorama>=0.4.6
