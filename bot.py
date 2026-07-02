@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import re
@@ -287,8 +288,20 @@ async def setup_hook() -> None:
     await bot.tree.sync()
     log.info("Slash commands synchronised")
 
+    if not getattr(bot, "light_mode", False):
+        monitor = bot.get_cog("Monitor")
+        if monitor:
+            log.info("Preloading OCR model (use --light to skip) ...")
+            await monitor.detector.preload_ocr()
+            log.info("OCR model ready")
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="ScamGuard bot")
+    parser.add_argument("--light", action="store_true", help="Skip OCR model preload (faster startup, slower first scan)")
+    args = parser.parse_args()
+    bot.light_mode = args.light
+
     try:
         bot.run(TOKEN)
     except discord.LoginFailure:

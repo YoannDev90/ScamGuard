@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -21,6 +22,7 @@ class Detector:
         self.bot = bot
         self._ocr = None
         self._session: aiohttp.ClientSession | None = None
+        self._ocr_sem = asyncio.Semaphore(4)
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -47,21 +49,30 @@ class Detector:
             log.info("easyocr ready")
         return self._ocr
 
+    async def preload_ocr(self) -> None:
+        """Force OCR model load in thread pool."""
+        await self.bot.loop.run_in_executor(None, lambda: self.ocr)
+
     async def ocr_image(self, url: str, max_ocr_len: int = 2000, max_size: int = 5242880, timeout: int = 30) -> Optional[str]:
         """Download image and extract text via OCR."""
         data = await self._download(url, max_size, timeout)
         if data is None:
             return None
-        log.debug("Running OCR on %s (%d bytes) ...", url, len(data))
-        try:
-            results = await self.bot.loop.run_in_executor(None, self._run_ocr, io.BytesIO(data))
-            if results:
-                text = " ".join(r[1] for r in results)
-                log.debug("OCR extracted %d chars from %s", len(text), url)
-                return text[:max_ocr_len]
-        except Exception as exc:
-            log.debug("OCR failed for %s: %s", url, exc)
-        return None
+        return await self._ocr_bytes(data, max_ocr_len)
+
+    async def _ocr_bytes(self, data: bytes, max_ocr_len: int = 2000) -> Optional[str]:
+        """Run OCR on image bytes."""
+        async with self._ocr_sem:
+            log.debug("Running OCR on %d bytes ...", len(data))
+            try:
+                results = await self.bot.loop.run_in_executor(None, self._run_ocr, io.BytesIO(data))
+                if results:
+                    text = " ".join(r[1] for r in results)
+                    log.debug("OCR extracted %d chars", len(text))
+                    return text[:max_ocr_len]
+            except Exception as exc:
+                log.debug("OCR failed: %s", exc)
+            return None
 
     def _run_ocr(self, data: io.BytesIO) -> list:
         import numpy as np
@@ -137,11 +148,20 @@ class Detector:
         dl_timeout = gc.get("image_download_timeout", 30)
         ocr_max = gc.get("max_ocr_length", 2000)
 
-        for url in urls:
-            text = await self.ocr_image(url, max_ocr_len=ocr_max, max_size=max_size, timeout=dl_timeout)
-            if text:
-                result["ocr_text"] += text + "\n"
-                all_text += text + "\n"
+        if urls:
+            download_sem = asyncio.Semaphore(10)
+
+            async def _dl(url: str) -> tuple[str, bytes | None]:
+                async with download_sem:
+                    return url, await self._download(url, max_size, dl_timeout)
+
+            downloaded = await asyncio.gather(*[_dl(u) for u in urls])
+            tasks = [self._ocr_bytes(d, ocr_max) for _, d in downloaded if d is not None]
+            ocr_results = await asyncio.gather(*tasks) if tasks else []
+            for text in ocr_results:
+                if text:
+                    result["ocr_text"] += text + "\n"
+                    all_text += text + "\n"
 
         all_text = all_text.strip()
         if not all_text:
