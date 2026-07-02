@@ -1,92 +1,52 @@
 {
-  // ------------------------------------------------------------------
-  // Scoring thresholds
-  // ------------------------------------------------------------------
-  score_alert: 50, // Minimum total score to trigger a scam alert
-  score_warn: 30, // Minimum total score to mark a message as suspicious
-  no_text_bonus: 10, // Extra points when only an image scored (no author text)
-
-  // ------------------------------------------------------------------
-  // Message filtering
-  // ------------------------------------------------------------------
-  message_min_length: 15, // Minimum characters in author text before analysis starts
-  ignored_user_ids: [], // List of Discord user IDs to completely ignore
-  ignored_role_ids: [], // List of Discord role IDs whose messages are ignored
-  ignored_channel_ids: [], // List of channel IDs where analysis is skipped
-
-  // ------------------------------------------------------------------
-  // Image / OCR analysis
-  // ------------------------------------------------------------------
-  image_max_size: 5242880, // Max image download size (bytes, 5 MB)
-  image_download_timeout: 30, // Seconds to wait for image download
-  supported_extensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"],
-  ocr_timeout: 30, // Seconds to wait for OCR processing
-  max_ocr_length: 10000, // Max characters of OCR text stored
-  language: ["fr", "en"], // OCR languages (easyocr codes)
-  image_url_regex: "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))",
-
-  // ------------------------------------------------------------------
-  // Image similarity (banned image matching via phash)
-  // ------------------------------------------------------------------
-  banned_images_dir: "banned_images",
-  banned_images_threshold: 20,
-  banned_images_score: 50,
-
-  // ------------------------------------------------------------------
-  // Notifications
-  // ------------------------------------------------------------------
-  log_channel_names: ["logs", "admin", "alerts", "moderation", "anti-scam"],
-  alert_channel_id: null,
-  ping_role_id: null,
-  dm_author_on_alert: false,
-  dm_message_template: "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.",
-  auto_delete: false,
-  cooldown_seconds: 300,
-
-  // ------------------------------------------------------------------
-  // Reaction emojis
-  // ------------------------------------------------------------------
-  reactions: {
-    scam: "🚨",
-    suspicious: "⚠️",
-    banned_image: "🔞",
-    clear: "✅",
-    community_alert: "🚨",
+  "score_alert": 50,
+  "score_warn": 30,
+  "no_text_bonus": 10,
+  "message_min_length": 15,
+  "ignored_user_ids": [],
+  "ignored_role_ids": [],
+  "ignored_channel_ids": [],
+  "image_max_size": 5242880,
+  "image_download_timeout": 30,
+  "supported_extensions": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"],
+  "ocr_timeout": 30,
+  "max_ocr_length": 10000,
+  "language": ["fr", "en"],
+  "image_url_regex": "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))",
+  "banned_images_dir": "banned_images",
+  "banned_images_threshold": 20,
+  "banned_images_score": 50,
+  "log_channel_names": ["logs", "admin", "alerts", "moderation", "anti-scam"],
+  "alert_channel_id": null,
+  "ping_role_id": null,
+  "dm_author_on_alert": false,
+  "dm_message_template": "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.",
+  "auto_delete": false,
+  "cooldown_seconds": 300,
+  "reactions": {
+    "scam": "🚨",
+    "suspicious": "⚠️",
+    "banned_image": "🔞",
+    "clear": "✅",
+    "community_alert": "🚨"
   },
-
-  // ------------------------------------------------------------------
-  // Embed colours
-  // ------------------------------------------------------------------
-  embed_colors: {
-    scam: 0xe74c3c,
-    suspicious: 0xe67e22,
-    banned_image: 0x9b59b6,
-    ok: 0x2ecc71,
-    config: 0x3498db,
+  "embed_colors": {
+    "scam": 15158332,
+    "suspicious": 15105570,
+    "banned_image": 10194230,
+    "ok": 3066993,
+    "config": 3447003
   },
-
-  embed_dark_red_threshold: 70,
-  warn_message_default: "Votre message a été signalé.",
-
-  // ------------------------------------------------------------------
-  // Community features
-  // ------------------------------------------------------------------
-  community_confirm_count: 3,
-  report_emoji: "👮",
-  enable_report: true,
-
-  // ------------------------------------------------------------------
-  // Actions
-  // ------------------------------------------------------------------
-  actions: {
-    scam: [{ type: "delete" }, { type: "ban" }],
-    suspicious: [],
-    banned_image: [],
+  "embed_dark_red_threshold": 70,
+  "warn_message_default": "Votre message a été signalé.",
+  "community_confirm_count": 3,
+  "report_emoji": "👮",
+  "enable_report": true,
+  "actions": {
+    "scam": [{"type": "delete"}, {"type": "ban"}],
+    "suspicious": [],
+    "banned_image": []
   },
-
-  // ------------------------------------------------------------------
-  // Debug / misc
-  // ------------------------------------------------------------------
-  debug_mode: true,
-  logging_level: "DEBUG",
+  "debug_mode": true,
+  "logging_level": "DEBUG"
 }

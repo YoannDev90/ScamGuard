@@ -11,7 +11,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from bot import config as global_cfg
+from core.config import config as global_cfg
 from core.config import get_guild_config, VersionManager, clear_guild_config_cache
 
 log = logging.getLogger("bot.config")
@@ -82,7 +82,7 @@ def _ec(gc, key: str, default: int) -> int:
 
 
 class Config(commands.Cog, name="Config"):
-    """Configuration management — per-guild settings, actions, patterns."""
+    """Configuration management — per-guild settings, actions, keywords."""
 
     config = app_commands.Group(name="config", description="Manage per-guild configuration")
 
@@ -97,12 +97,12 @@ class Config(commands.Cog, name="Config"):
         gc = get_guild_config(interaction.guild_id)
         info = gc.to_dict()
 
-        patterns = gc.get_patterns()
-        pat_lines = []
-        for p in patterns:
-            enabled = p.get("enabled", True)
-            pat_lines.append(f"{'✅' if enabled else '❌'} `{p['name']}` weight={p['weight']} — {p.get('desc', '')}")
-        pat_text = "\n".join(pat_lines) if pat_lines else "Global defaults"
+        kw = gc.get_keywords()
+        kw_lines = []
+        for k in kw:
+            enabled = k.get("enabled", True)
+            kw_lines.append(f"{'✅' if enabled else '❌'} `{k['word']}` weight={k['weight']} — {k.get('desc', '')}")
+        kw_text = "\n".join(kw_lines) if kw_lines else "Global defaults"
 
         actions = gc.data.get("actions", {})
         act_lines = []
@@ -148,7 +148,7 @@ class Config(commands.Cog, name="Config"):
             colour=discord.Colour(_ec(gc, "config", 0x3498DB)),
             timestamp=discord.utils.utcnow(),
         )
-        embed.add_field(name=f"Patterns ({len(patterns)})", value=f"```{pat_text[:900]}```", inline=False)
+        embed.add_field(name=f"Keywords ({len(kw)})", value=f"```{kw_text[:900]}```", inline=False)
         embed.add_field(name=f"Actions ({sum(len(v) for v in actions.values())})", value=act_text[:1000] or "None", inline=False)
         embed.add_field(name="Reactions", value=react_text, inline=True)
         embed.add_field(name="Embed colors", value=colors_text, inline=True)
@@ -290,49 +290,49 @@ class Config(commands.Cog, name="Config"):
         get_guild_config(interaction.guild_id).clear_actions(trigger)
         await interaction.followup.send(f"Actions for `{trigger}` cleared.", ephemeral=True)
 
-    # ── Patterns ─────────────────────────────────────────────────────
+    # ── Keywords ─────────────────────────────────────────────────────
 
-    @config.command(name="patterns-list", description="List patterns")
-    async def config_patterns_list(self, interaction: discord.Interaction) -> None:
+    @config.command(name="keywords-list", description="List keywords")
+    async def config_keywords_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
-        patterns = gc.get_patterns()
-        if not patterns:
-            await interaction.followup.send("No patterns.", ephemeral=True)
+        kw = gc.get_keywords()
+        if not kw:
+            await interaction.followup.send("No keywords.", ephemeral=True)
             return
-        lines = [f"{'✅' if p.get('enabled', True) else '❌'} `{p['name']}` weight={p['weight']} — {p.get('desc', '')}" for p in patterns]
+        lines = [f"{'✅' if k.get('enabled', True) else '❌'} `{k['word']}` weight={k['weight']} — {k.get('desc', '')}" for k in kw]
         pag = "\n".join(lines)
         if len(pag) > 1900:
             pag = pag[:1900] + "\n..."
-        embed = discord.Embed(title=f"Patterns ({len(patterns)})", description=pag, colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
+        embed = discord.Embed(title=f"Keywords ({len(kw)})", description=pag, colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @config.command(name="patterns-add", description="Add a pattern")
+    @config.command(name="keywords-add", description="Add a keyword")
     @app_commands.default_permissions(manage_guild=True)
-    async def config_patterns_add(self, interaction: discord.Interaction, name: str, pattern: str, weight: int, desc: str = "") -> None:
+    async def config_keywords_add(self, interaction: discord.Interaction, word: str, weight: int, desc: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
-        ok = gc.add_pattern(name, pattern, weight, desc)
-        await interaction.followup.send(f"Pattern `{name}` added." if ok else f"`{name}` already exists.", ephemeral=True)
+        ok = gc.add_keyword(word, weight, desc)
+        await interaction.followup.send(f"Keyword `{word}` added." if ok else f"`{word}` already exists.", ephemeral=True)
 
-    @config.command(name="patterns-remove", description="Remove a pattern")
+    @config.command(name="keywords-remove", description="Remove a keyword")
     @app_commands.default_permissions(manage_guild=True)
-    async def config_patterns_remove(self, interaction: discord.Interaction, name: str) -> None:
+    async def config_keywords_remove(self, interaction: discord.Interaction, word: str) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
-        ok = gc.remove_pattern(name)
-        await interaction.followup.send(f"Pattern `{name}` removed." if ok else f"`{name}` not found.", ephemeral=True)
+        ok = gc.remove_keyword(word)
+        await interaction.followup.send(f"Keyword `{word}` removed." if ok else f"`{word}` not found.", ephemeral=True)
 
-    @config.command(name="patterns-toggle", description="Enable/disable a pattern")
+    @config.command(name="keywords-toggle", description="Enable/disable a keyword")
     @app_commands.default_permissions(manage_guild=True)
-    async def config_patterns_toggle(self, interaction: discord.Interaction, name: str) -> None:
+    async def config_keywords_toggle(self, interaction: discord.Interaction, word: str) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
-        state = gc.toggle_pattern(name)
+        state = gc.toggle_keyword(word)
         if state is None:
-            await interaction.followup.send(f"`{name}` not found.", ephemeral=True)
+            await interaction.followup.send(f"`{word}` not found.", ephemeral=True)
         else:
-            await interaction.followup.send(f"Pattern `{name}` {'enabled' if state else 'disabled'}.", ephemeral=True)
+            await interaction.followup.send(f"Keyword `{word}` {'enabled' if state else 'disabled'}.", ephemeral=True)
 
     # ── Ignore ───────────────────────────────────────────────────────
 
@@ -478,8 +478,9 @@ class Config(commands.Cog, name="Config"):
         try:
             global_cfg.reload()
             clear_guild_config_cache()
+            kw_count = len(global_cfg.raw_keywords)
             await interaction.followup.send(
-                f"Config reloaded — {len(global_cfg.raw_patterns)} global patterns.",
+                f"Config reloaded — {kw_count} global keywords.",
                 ephemeral=True,
             )
         except Exception as exc:
@@ -746,7 +747,7 @@ class ConfigSetup(commands.Cog, name="Setup"):
             colour=discord.Colour.blue(),
             description=(
                 "ScamGuard scans messages for scams using **OCR** (image text recognition) "
-                "and **pattern matching** (regex). When a scam is detected, it can automatically "
+                "and **keyword matching**. When a scam is detected, it can automatically "
                 "delete, warn, kick, ban, timeout, or log — depending on your config."
             ),
         )
@@ -764,7 +765,7 @@ class ConfigSetup(commands.Cog, name="Setup"):
                 "`/config get <key>` — Read a setting\n"
                 "`/config actions-add` — Add an action\n"
                 "`/config actions-remove` — Remove an action\n"
-                "`/config patterns-list` — View scam patterns\n"
+                "`/config keywords-list` — View scam keywords\n"
                 "`/config reset` — Reset guild config"
             ),
             inline=False,

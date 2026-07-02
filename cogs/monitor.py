@@ -40,7 +40,6 @@ class Monitor(commands.Cog, name="Monitor"):
     # ── Alert embed ──────────────────────────────────────────────────
 
     async def _send_alert(self, message: discord.Message, result: dict, gc) -> None:
-        """Send one alert embed to the configured alert channel."""
         ch_id = gc.get("alert_channel_id")
         target = self.bot.get_channel(ch_id) if ch_id else None
         if not target:
@@ -64,7 +63,7 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.Forbidden:
             log.warning("Cannot send alert to #%s", target.name)
 
-    # ── Message handler ──────────────────────────────────────────────
+    # ── Main message handler ─────────────────────────────────────────
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -73,23 +72,28 @@ class Monitor(commands.Cog, name="Monitor"):
         except Exception:
             log.exception("Unhandled error in on_message msg %d", message.id)
 
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        if before.content == after.content or after.author.bot or not after.guild:
+            return
+        try:
+            await self._on_message_inner(after)
+        except Exception:
+            log.exception("Unhandled error in on_message_edit msg %d", after.id)
+
     async def _on_message_inner(self, message: discord.Message) -> None:
         if message.author.bot or not message.guild:
             return
 
         gc = get_guild_config(message.guild.id)
-
         uid, cid, gid = message.author.id, message.channel.id, message.guild.id
 
         if uid in gc.get_ignored("user_ids"):
-            log.debug("Ignored user %d in guild=%d", uid, gid)
             return
         if cid in gc.get_ignored("channel_ids"):
-            log.debug("Ignored channel %d in guild=%d", cid, gid)
             return
         ignored_roles = [r.id for r in message.author.roles if r.id in gc.get_ignored("role_ids")]
         if ignored_roles:
-            log.debug("Ignored roles %s user=%d guild=%d", ignored_roles, uid, gid)
             return
 
         min_len = gc.get("message_min_length", 15)
@@ -97,75 +101,35 @@ class Monitor(commands.Cog, name="Monitor"):
         if not urls and len(message.content.strip()) < min_len:
             return
 
-        log.debug("Analyzing msg=%d author=%d guild=%d content_len=%d urls=%d", message.id, uid, gid, len(message.content), len(urls))
-
         result = await self.detector.analyze_message(message, gc)
-
-        # Parallel banned-image check
-        if urls:
-            max_size = gc.get("image_max_size", 5242880)
-            dl_timeout = gc.get("image_download_timeout", 30)
-            download_sem = asyncio.Semaphore(10)
-
-            async def _check(url: str):
-                async with download_sem:
-                    data = await self.detector._download(url, max_size, dl_timeout)
-                    if data:
-                        return await self.detector.check_banned_image(data, gc)
-                    return None
-
-            banned_matches = [m for m in await asyncio.gather(*[_check(u) for u in urls]) if m]
-            if banned_matches:
-                match = banned_matches[0]
-                result["image_flag"] = {"banned": match}
-                banned_score = int(gc.get("banned_images_score", 50))
-                result["score"] += banned_score
-                result.setdefault("factors", []).append(
-                    f"banned_image ({match['matched']}, {match['similarity']}%)"
-                )
-                log.warning("Banned image msg=%d guild=%d matched=%s sim=%s", message.id, gid, match["matched"], match["similarity"])
-            else:
-                log.debug("No banned image match msg=%d guild=%d urls=%d", message.id, gid, len(urls))
-
         triggered = result["is_scam"] or bool(result.get("image_flag"))
-        log.debug("Detection result msg=%d triggered=%s score=%d factors=%s", message.id, triggered, result["score"], result.get("factors", []))
 
         if not triggered:
             return
 
-        # Cooldown check — skip repeat actions/alert, keep reaction
+        # Cooldown check first
         cd = gc.get("cooldown_seconds", 300)
         now = message.created_at.timestamp()
         last = self._cooldowns.get(uid, 0)
         on_cooldown = (now - last) < cd
 
-        # Reactions (before actions — message may be deleted)
+        # Reactions always fire (visual feedback before message delete)
         reactions_cfg = gc.get("reactions", {})
         try:
-            if result.get("image_flag"):
-                emoji = reactions_cfg.get("banned_image", "\U0001f51e")
-                await message.add_reaction(emoji)
-                log.debug("Reaction %s added msg=%d (banned)", emoji, message.id)
-            else:
-                emoji = reactions_cfg.get("scam", "\U0001f6a8")
-                await message.add_reaction(emoji)
-                log.debug("Reaction %s added msg=%d (scam)", emoji, message.id)
-        except discord.HTTPException as exc:
-            log.debug("Reaction failed msg=%d: %s", message.id, exc)
+            emoji = reactions_cfg.get("banned_image" if result.get("image_flag") else "scam", "\U0001f6a8")
+            await message.add_reaction(emoji)
+        except discord.HTTPException:
+            pass
 
         if on_cooldown:
-            log.debug("Cooldown active for user=%d (%ds remaining)", uid, int(cd - (now - last)))
+            log.debug("Cooldown active user=%d msg=%d", uid, message.id)
             return
 
-        # Execute actions — one trigger, fast
+        # Execute actions + alert
         await execute_actions("scam", message, result)
-
         self._cooldowns[uid] = now
         self._clean_cooldowns()
-
         log.warning("DETECTED guild=%d msg=%d author=%d score=%d", gid, message.id, uid, result["score"])
-
-        # One alert embed
         await self._send_alert(message, result, gc)
 
     # ── Community reaction system ────────────────────────────────────

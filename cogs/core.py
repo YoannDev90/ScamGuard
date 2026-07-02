@@ -31,7 +31,7 @@ class Core(commands.Cog, name="Core"):
         embed.add_field(name="Response time", value=f"**{response_ms}** ms")
         await interaction.edit_original_response(content=None, embed=embed)
 
-    @app_commands.command(name="test-detect", description="Analyze a message against patterns")
+    @app_commands.command(name="test-detect", description="Analyze a message against keywords")
     @app_commands.describe(message_id="Message ID", channel="Channel (default: current)")
     async def test_detect(
         self,
