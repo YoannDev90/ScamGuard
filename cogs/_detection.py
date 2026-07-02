@@ -1,4 +1,4 @@
-"""Detection engine: OCR, image similarity, keyword scoring, user signals."""
+"""Detection engine: OCR, image similarity, keyword scoring, user signals, URL checks."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ import asyncio
 import hashlib
 import io
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import aiohttp
 import discord
@@ -22,6 +24,15 @@ _MEMO_OCR: dict[str, str] = {}
 _crosspost: dict[str, list[tuple[int, float]]] = {}
 # First-interaction tracker
 _seen_users: set[int] = set()
+# URL extraction regex
+_URL_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
+# Domain age cache: domain -> (age_days, timestamp)
+_domain_age_cache: dict[str, tuple[int | None, float]] = {}
+_DOMAIN_CACHE_TTL = 3600
+# Short URL resolution cache: short_url -> final_url
+_resolve_cache: dict[str, str | None] = {}
+_RESOLVE_TIMEOUT = 5
+_RESOLVE_MAX_REDIRECTS = 5
 
 
 def _ocr_cache_key(data: bytes) -> str:
@@ -191,6 +202,153 @@ class Detector:
                     urls.append(m.group(1))
         return urls
 
+    # ── URL reputation ────────────────────────────────────────────────
+
+    async def _check_urls(self, message: discord.Message, gc: GuildConfig) -> list[tuple[str, int]]:
+        """Check URLs for suspicious patterns, resolve shorteners, check domain age."""
+        factors: list[tuple[str, int]] = []
+        if not message.content.strip():
+            return factors
+
+        urls = _URL_RE.findall(message.content)
+        if not urls:
+            return factors
+
+        whitelisted = gc.get_whitelisted_domains()
+        shorteners = gc.get("url_shorteners", [])
+        suspect_tlds = gc.get("suspect_tlds", [])
+        max_total = gc.get("url_max_score", 50)
+        new_domain_days = gc.get("url_new_domain_days", 30)
+        seen_domains: set[str] = set()
+
+        for url in urls[:5]:
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc.lower()
+                if ":" in domain:
+                    domain = domain.split(":")[0]
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                if not domain:
+                    continue
+                if domain in seen_domains:
+                    continue
+                seen_domains.add(domain)
+                if domain in whitelisted:
+                    continue
+
+                total = sum(s for _, s in factors)
+                is_shortener = domain in shorteners
+
+                # URL shortener → resolve redirect, check final domain
+                if is_shortener:
+                    score = gc.get("url_shortener_score", 15)
+                    if score and total < max_total:
+                        factors.append((f"url_shortener_{domain}", score))
+                        total += score
+                        log.debug("URL: shortener %s (+%d)", domain, score)
+
+                    final_url = await self._resolve_short_url(url)
+                    if final_url:
+                        final_parsed = urlparse(final_url)
+                        final_domain = final_parsed.netloc.lower()
+                        if ":" in final_domain:
+                            final_domain = final_domain.split(":")[0]
+                        if final_domain.startswith("www."):
+                            final_domain = final_domain[4:]
+                        if final_domain and final_domain != domain and final_domain not in seen_domains:
+                            seen_domains.add(final_domain)
+                            if final_domain in whitelisted:
+                                continue
+                            f_total = sum(s for _, s in factors)
+                            await self._analyze_domain(final_domain, factors, f_total, gc, suspect_tlds, max_total, new_domain_days)
+                    continue
+
+                # Domain checks (IP, TLD, age)
+                await self._analyze_domain(domain, factors, sum(s for _, s in factors), gc, suspect_tlds, max_total, new_domain_days)
+
+            except Exception:
+                log.debug("URL check failed for %s", url, exc_info=True)
+
+        return factors
+
+    async def _analyze_domain(self, domain: str, factors: list, total: int, gc, suspect_tlds: list, max_total: int, new_domain_days: int) -> None:
+        """Apply domain-level checks (IP, TLD, age) to a domain."""
+        # IP-based
+        score = gc.get("url_ip_score", 20)
+        if score and total < max_total:
+            try:
+                import ipaddress
+                ipaddress.ip_address(domain)
+                factors.append((f"url_ip_{domain}", score))
+                total += score
+                log.debug("URL: IP-based domain %s (+%d)", domain, score)
+            except ValueError:
+                pass
+
+        # Suspicious TLD
+        score = gc.get("url_suspect_tld_score", 10)
+        if score and total < max_total:
+            for tld in suspect_tlds:
+                if domain.endswith(tld):
+                    factors.append((f"url_tld_{tld}", score))
+                    total += score
+                    log.debug("URL: suspect TLD %s (%s) (+%d)", domain, tld, score)
+                    break
+
+        # Domain age
+        score = gc.get("url_new_domain_score", 25)
+        if score and total < max_total:
+            age = await self._get_domain_age(domain)
+            if age is not None and age < new_domain_days:
+                factors.append((f"url_new_domain_{domain}_{age}d", score))
+                log.debug("URL: new domain %s %dd (+%d)", domain, age, score)
+
+    async def _resolve_short_url(self, url: str) -> str | None:
+        """Follow redirects to resolve a shortened URL. Returns final URL or None."""
+        cached = _resolve_cache.get(url)
+        if cached is not None:
+            return cached if cached else None
+
+        try:
+            async with self.session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=_RESOLVE_TIMEOUT),
+                allow_redirects=True,
+                max_redirects=_RESOLVE_MAX_REDIRECTS,
+            ) as resp:
+                final = str(resp.url)
+                _resolve_cache[url] = final if final != url else None
+                return _resolve_cache[url]
+        except Exception:
+            log.debug("URL resolve failed for %s", url)
+            _resolve_cache[url] = None
+            return None
+
+    async def _get_domain_age(self, domain: str) -> int | None:
+        """Return domain age in days, from cache or whois. Returns None on failure."""
+        now = time.time()
+        cached = _domain_age_cache.get(domain)
+        if cached and now - cached[1] < _DOMAIN_CACHE_TTL:
+            return cached[0]
+
+        try:
+            import whois
+            w = await self.bot.loop.run_in_executor(None, lambda: whois.whois(domain))
+            creation = w.creation_date
+            if isinstance(creation, list):
+                creation = creation[0]
+            if creation:
+                import datetime
+                if isinstance(creation, datetime.datetime):
+                    age = (discord.utils.utcnow() - creation).days
+                    _domain_age_cache[domain] = (age, now)
+                    return age
+        except Exception:
+            _domain_age_cache[domain] = (None, now)
+            log.debug("whois lookup failed for %s", domain)
+        return None
+
     # ── User signals ──────────────────────────────────────────────────
 
     def _compute_user_signals(self, message: discord.Message, gc: GuildConfig, has_urls: bool) -> list[tuple[str, int]]:
@@ -324,6 +482,12 @@ class Detector:
         # User behavioural signals
         user_signals = self._compute_user_signals(message, gc, bool(urls))
         for name, s in user_signals:
+            factors.append((name, s))
+            details.append(f"{name} (+{s})")
+
+        # URL reputation checks
+        url_factors = await self._check_urls(message, gc)
+        for name, s in url_factors:
             factors.append((name, s))
             details.append(f"{name} (+{s})")
 

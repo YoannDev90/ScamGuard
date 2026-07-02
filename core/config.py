@@ -384,6 +384,29 @@ class GuildConfig:
         self._save()
         return True
 
+    def get_whitelisted_domains(self) -> list[str]:
+        return self.data.get("whitelist", {}).get("domains", [])
+
+    def add_whitelisted_domain(self, domain: str) -> bool:
+        domains = self.data.setdefault("whitelist", {}).setdefault("domains", [])
+        if domain in domains:
+            return False
+        VersionManager(self).snapshot()
+        domains.append(domain)
+        self.data["_version"] += 1
+        self._save()
+        return True
+
+    def remove_whitelisted_domain(self, domain: str) -> bool:
+        domains = self.data.get("whitelist", {}).get("domains", [])
+        if domain not in domains:
+            return False
+        VersionManager(self).snapshot()
+        domains.remove(domain)
+        self.data["_version"] += 1
+        self._save()
+        return True
+
     def batch_apply(self, **changes) -> None:
         from copy import deepcopy
         prev = deepcopy(self.data)

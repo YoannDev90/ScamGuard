@@ -51,6 +51,9 @@ KNOWN_SETTINGS = [
     "signal_first_interaction_score",
     "signal_image_only_score", "signal_no_avatar_score",
     "signal_crosspost_score", "signal_crosspost_window", "signal_crosspost_min_channels",
+    "url_shorteners", "suspect_tlds",
+    "url_new_domain_days", "url_new_domain_score",
+    "url_shortener_score", "url_ip_score", "url_suspect_tld_score", "url_max_score",
 ]
 
 
@@ -371,6 +374,42 @@ class Config(commands.Cog, name="Config"):
             await interaction.followup.send(f"{entity.mention} {'added to' if action == 'add' else 'removed from'} ignore list.", ephemeral=True)
         else:
             await interaction.followup.send(f"{entity.mention} already {'in' if action == 'add' else 'not in'} the list.", ephemeral=True)
+
+    # ── Whitelist domains ────────────────────────────────────────────
+
+    @config.command(name="whitelist-domain", description="Manage whitelisted domains (bypass URL checks)")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Remove", value="remove"),
+    ])
+    async def config_whitelist_domain(
+        self,
+        interaction: discord.Interaction,
+        action: str,
+        domain: str,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        domain = domain.lower().removeprefix("www.").removeprefix("https://").removeprefix("http://").split("/")[0]
+        if action == "add":
+            ok = gc.add_whitelisted_domain(domain)
+            await interaction.followup.send(f"Domain `{domain}` whitelisted." if ok else f"`{domain}` already whitelisted.", ephemeral=True)
+        else:
+            ok = gc.remove_whitelisted_domain(domain)
+            await interaction.followup.send(f"Domain `{domain}` removed." if ok else f"`{domain}` not whitelisted.", ephemeral=True)
+
+    @config.command(name="whitelist-domains", description="List whitelisted domains")
+    async def config_whitelist_domains_list(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        domains = gc.get_whitelisted_domains()
+        if not domains:
+            await interaction.followup.send("No whitelisted domains.", ephemeral=True)
+            return
+        lines = [f"- `{d}`" for d in sorted(domains)]
+        embed = discord.Embed(title=f"Whitelisted domains ({len(domains)})", description="\n".join(lines), colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ── Versions ─────────────────────────────────────────────────────
 

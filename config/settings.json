@@ -59,5 +59,14 @@
   "signal_no_avatar_score": 5,
   "signal_crosspost_score": 20,
   "signal_crosspost_window": 300,
-  "signal_crosspost_min_channels": 2
+  "signal_crosspost_min_channels": 2,
+
+  "url_shorteners": ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "shorturl.at", "shorte.st", "adf.ly", "ow.ly", "is.gd", "buff.ly", "rebrand.ly", "cutt.ly", "rb.gy", "bl.ink"],
+  "suspect_tlds": [".xyz", ".top", ".gq", ".ml", ".cf", ".tk", ".ga", ".download", ".stream", ".click", ".loan", ".work", ".date", ".men"],
+  "url_new_domain_days": 30,
+  "url_new_domain_score": 25,
+  "url_shortener_score": 15,
+  "url_ip_score": 20,
+  "url_suspect_tld_score": 10,
+  "url_max_score": 50
 }
