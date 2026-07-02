@@ -25,7 +25,7 @@
   "reactions": {
     "scam": "🚨",
     "suspicious": "⚠️",
-    "banned_image": "🔞",
+    "banned_image": "🛡️",
     "clear": "✅",
     "community_alert": "🚨"
   },

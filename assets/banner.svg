@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#0f3460"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- Accent line -->
+  <rect x="720" y="320" width="480" height="4" rx="2" fill="url(#accent)"/>
+
+  <!-- Shield logo (left side) -->
+  <g transform="translate(420, 540) scale(1.8)">
+    <!-- Outer shield -->
+    <path d="M0,-160 L120,-80 L120,60 Q120,140 0,180 Q-120,140 -120,60 L-120,-80 Z"
+          fill="none" stroke="#e94560" stroke-width="6" stroke-linejoin="round"/>
+    <!-- Inner shield (highlight) -->
+    <path d="M0,-140 L105,-70 L105,50 Q105,120 0,155 Q-105,120 -105,50 L-105,-70 Z"
+          fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" opacity="0.3"/>
+    <!-- Vertical bars -->
+    <rect x="-8" y="-90" width="16" height="180" rx="8" fill="#ffffff"/>
+    <rect x="-48" y="-60" width="12" height="130" rx="6" fill="#ffffff" opacity="0.7"/>
+    <rect x="36" y="-60" width="12" height="130" rx="6" fill="#ffffff" opacity="0.7"/>
+  </g>
+
+  <!-- ScamGuard text -->
+  <text x="780" y="480" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="96" font-weight="700" fill="#ffffff" letter-spacing="4">
+    ScamGuard
+  </text>
+
+  <!-- Tagline -->
+  <text x="780" y="560" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="36" font-weight="300" fill="#a0a0b0" letter-spacing="2">
+    Anti-scam protection for your Discord
+  </text>
+
+  <!-- Bottom accent bar -->
+  <rect x="780" y="590" width="240" height="3" rx="1.5" fill="#e94560"/>
+</svg>

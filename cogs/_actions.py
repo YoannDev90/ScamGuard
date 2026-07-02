@@ -22,7 +22,7 @@ def _build_alert_embed(message: discord.Message, result: dict, gc=None, *, trigg
     threshold = gc.get("embed_dark_red_threshold", 70) if gc else 70
     colour = discord.Colour.dark_red() if score >= threshold else discord.Colour(scam_colour)
 
-    title = {"scam": "🚨 Scam detected", "suspicious": "⚠️ Suspicious message", "banned_image": "🔞 Banned image detected"}.get(trigger, f"🚨 {trigger}")
+    title = {"scam": "🚨 Scam detected", "suspicious": "⚠️ Suspicious message", "banned_image": "🛡️ Banned image detected"}.get(trigger, f"🚨 {trigger}")
 
     embed = discord.Embed(title=title, colour=colour, timestamp=discord.utils.utcnow())
     embed.add_field(name="Author", value=message.author.mention, inline=True)

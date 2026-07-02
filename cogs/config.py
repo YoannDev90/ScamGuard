@@ -188,7 +188,7 @@ class Config(commands.Cog, name="Config"):
         react_text = (
             f"scam: {reactions_cfg.get('scam', '🚨')}\n"
             f"suspicious: {reactions_cfg.get('suspicious', '⚠️')}\n"
-            f"banned_img: {reactions_cfg.get('banned_image', '🔞')}\n"
+            f"banned_img: {reactions_cfg.get('banned_image', '🛡️')}\n"
             f"clear: {reactions_cfg.get('clear', '✅')}"
         ) if reactions_cfg else "Defaults"
 
