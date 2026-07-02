@@ -66,6 +66,35 @@
   enable_report: true, // Enable the report-emoji feature
 
   // ------------------------------------------------------------------
+  // Actions — what the bot does when a trigger fires
+  // Trigger levels: scam, suspicious, banned_image
+  // Action types:
+  //   delete          — Supprimer le message
+  //   warn            — DM d'avertissement à l'auteur
+  //   kick            — Exclure l'auteur
+  //   ban             — Bannir l'auteur
+  //   softban         — Ban + unban (supprime messages récents)
+  //   timeout         — Timeout (duration en minutes)
+  //   notify_channel  — Envoyer alerte dans un salon (channel_id)
+  //   notify_role     — Ping un rôle (role_id) dans le salon d'alerte
+  //   notify_user     — Ping un utilisateur (user_ids)
+  //   add_role        — Ajouter un rôle (role_id)
+  //   remove_role     — Retirer un rôle (role_id)
+  //   log             — Journaliser dans un salon (channel_id)
+  // ------------------------------------------------------------------
+  actions: {
+    scam: [
+      // Exemple: { type: "delete" },
+      // Exemple: { type: "notify_channel", channel_id: null },
+    ],
+    suspicious: [],
+    banned_image: [
+      // Exemple: { type: "delete" },
+      // Exemple: { type: "add_role", role_id: null },
+    ],
+  },
+
+  // ------------------------------------------------------------------
   // Debug / misc
   // ------------------------------------------------------------------
   debug_mode: false, // Enable extra debug-level logging for this cog

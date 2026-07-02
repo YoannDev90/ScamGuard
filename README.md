@@ -51,8 +51,86 @@ Des images de référence dans `banned_images/` sont comparées via hash percept
 |----------|-------------|
 | `/ping` | Affiche la latence du bot |
 | `/test-detect <message_id> [channel]` | Analyse un message spécifique |
-| `/config show` | Affiche la configuration actuelle (admin) |
-| `/config reload` | Recharge les configs JSON (admin) |
+
+### Configuration (admin)
+
+Toute la config se gère depuis Discord (`/config`). Les fichiers JSON5 sont mis à jour automatiquement.
+
+| Sous-commande | Description |
+|---------------|-------------|
+| `/config show` | Affiche toute la configuration (patterns, actions, paramètres) |
+| `/config get <key>` | Affiche une valeur spécifique |
+| `/config set <key> <value>` | Modifie un paramètre |
+| `/config reload` | Recharge depuis les fichiers JSON5 |
+
+**Gestion des actions :**
+
+| Sous-commande | Description |
+|---------------|-------------|
+| `/config actions-list [trigger]` | Liste les actions par déclencheur |
+| `/config actions-add <trigger> <action>` | Ajoute une action (voir ci-dessous) |
+| `/config actions-remove <trigger> <index>` | Supprime une action |
+| `/config actions-clear <trigger>` | Vide toutes les actions d'un déclencheur |
+
+**Gestion des patterns :**
+
+| Sous-commande | Description |
+|---------------|-------------|
+| `/config patterns-list` | Liste tous les patterns |
+| `/config patterns-add <name> <regex> <weight>` | Ajoute un pattern |
+| `/config patterns-remove <name>` | Supprime un pattern |
+| `/config patterns-toggle <name>` | Active/désactive un pattern |
+
+**Gestion des ignorés :**
+
+| Sous-commande | Description |
+|---------------|-------------|
+| `/config ignore add user <user>` | Ignore un utilisateur |
+| `/config ignore add role <role>` | Ignore un rôle |
+| `/config ignore add channel <channel>` | Ignore un salon |
+| `/config ignore remove user <user>` | Ne plus ignorer |
+| `/config ignore remove role <role>` | Ne plus ignorer |
+| `/config ignore remove channel <channel>` | Ne plus ignorer |
+
+### Système d'actions
+
+Configurez ce que le bot fait automatiquement en fonction du déclencheur.
+
+**Déclencheurs (trigger) :**
+
+| Trigger | Quand ? |
+|---------|---------|
+| `scam` | Score ≥ seuil alerte (50) |
+| `suspicious` | Score ≥ seuil warning (30) |
+| `banned_image` | Image interdite détectée (pHash) |
+
+**Types d'actions :**
+
+| Action | Paramètres | Effet |
+|--------|------------|-------|
+| `delete` | — | Supprime le message |
+| `warn` | `message` (optionnel) | Envoie un DM d'avertissement |
+| `kick` | — | Exclut l'auteur |
+| `ban` | — | Bannit l'auteur |
+| `softban` | — | Ban + unban (supprime les messages) |
+| `timeout` | `duration` (minutes) | Timeout l'auteur |
+| `notify_channel` | `channel` | Envoie une alerte dans un salon |
+| `notify_role` | `role` | Ping un rôle dans le salon d'alerte |
+| `notify_user` | `user` | Ping un utilisateur |
+| `add_role` | `role` | Ajoute un rôle à l'auteur |
+| `remove_role` | `role` | Retire un rôle à l'auteur |
+| `log` | `channel` | Journalise dans un salon |
+
+**Exemples :**
+
+```bash
+/config actions-add trigger:scam action:delete
+/config actions-add trigger:scam action:notify_channel channel:#alerts
+/config actions-add trigger:scam action:timeout duration:30
+/config actions-add trigger:banned_image action:kick
+/config actions-add trigger:suspicious action:warn message:"Attention, ce message est suspect"
+/config actions-add trigger:banned_image action:add_role role:@Muted
+```
 
 ## Installation
 
@@ -89,7 +167,9 @@ cp .env.example .env
 4. Activer les Intents :
    - ✅ SERVER MEMBERS INTENT
    - ✅ MESSAGE CONTENT INTENT
-5. Inviter le bot avec les permissions : `Send Messages`, `Read Messages`, `Attach Files`, `Read Message History`, `Add Reactions`
+5. Inviter le bot avec les permissions nécessaires selon les actions configurées :
+   - **De base** : `Send Messages`, `Read Messages`, `Read Message History`, `Add Reactions`, `Attach Files`
+   - **Pour les actions** : `Kick Members`, `Ban Members`, `Moderate Members` (timeout), `Manage Roles`, `Manage Messages`
 
 ### Lancement
 

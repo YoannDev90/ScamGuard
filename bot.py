@@ -82,6 +82,13 @@ class ConfigManager:
                 return json5.load(f)
         return {}
 
+    def _save_json(self, path: Path, data: dict) -> None:
+        """Write dict as JSON (preserves JSON5 compat for re-reading)."""
+        import json
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        log.info("Saved %s", path.name)
+
     def load(self) -> None:
         patterns_path = self._dir / "patterns.json5"
         settings_path = self._dir / "settings.json5"
@@ -132,6 +139,97 @@ class ConfigManager:
     def reload(self) -> None:
         self._loaded = False
         self.load()
+
+    def _recompile(self) -> None:
+        """Recompile compiled patterns from raw pattern data."""
+        self._compiled = []
+        for p in self._patterns:
+            try:
+                regex = re.compile(p["pattern"], re.I)
+                self._compiled.append(
+                    (p["name"], regex, p["weight"], p.get("enabled", True))
+                )
+            except re.error as exc:
+                log.error("Regex error for '%s': %s", p["name"], exc)
+
+    # ── Setting access ───────────────────────────────────────────────
+
+    def set_setting(self, key: str, value) -> None:
+        """Set a runtime setting and persist to disk."""
+        if key == "actions":
+            return  # actions managed via dedicated commands
+        self.settings[key] = value
+        self._save_json(self._dir / "settings.json5", self.settings)
+
+    def get_actions(self, trigger: str) -> list:
+        """Return action list for a given trigger level."""
+        return self.settings.get("actions", {}).get(trigger, [])
+
+    def add_action(self, trigger: str, action: dict) -> None:
+        """Add an action to a trigger level and persist."""
+        actions = self.settings.setdefault("actions", {})
+        actions.setdefault(trigger, []).append(action)
+        self._save_json(self._dir / "settings.json5", self.settings)
+
+    def remove_action(self, trigger: str, index: int) -> bool:
+        """Remove an action by index. Returns False if invalid."""
+        actions = self.settings.get("actions", {}).get(trigger, [])
+        if 0 <= index < len(actions):
+            actions.pop(index)
+            self._save_json(self._dir / "settings.json5", self.settings)
+            return True
+        return False
+
+    def clear_actions(self, trigger: str) -> None:
+        """Clear all actions for a trigger."""
+        actions = self.settings.setdefault("actions", {})
+        actions[trigger] = []
+        self._save_json(self._dir / "settings.json5", self.settings)
+
+    # ── Pattern management ───────────────────────────────────────────
+
+    def add_pattern(
+        self, name: str, pattern: str, weight: int, description: str = ""
+    ) -> bool:
+        """Add a pattern. Returns False if name already exists."""
+        for p in self._patterns:
+            if p["name"] == name:
+                return False
+        entry = {
+            "name": name,
+            "pattern": pattern,
+            "weight": weight,
+            "enabled": True,
+            "desc": description or name,
+        }
+        self._patterns.append(entry)
+        self._recompile()
+        self._save_json(self._dir / "patterns.json5", {"patterns": self._patterns})
+        return True
+
+    def remove_pattern(self, name: str) -> bool:
+        """Remove a pattern by name. Returns False if not found."""
+        for i, p in enumerate(self._patterns):
+            if p["name"] == name:
+                self._patterns.pop(i)
+                self._recompile()
+                self._save_json(
+                    self._dir / "patterns.json5", {"patterns": self._patterns}
+                )
+                return True
+        return False
+
+    def toggle_pattern(self, name: str) -> bool | None:
+        """Toggle a pattern's enabled state. Returns new state or None."""
+        for p in self._patterns:
+            if p["name"] == name:
+                p["enabled"] = not p.get("enabled", True)
+                self._recompile()
+                self._save_json(
+                    self._dir / "patterns.json5", {"patterns": self._patterns}
+                )
+                return p["enabled"]
+        return None
 
 
 config = ConfigManager()
