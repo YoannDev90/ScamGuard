@@ -9,8 +9,8 @@ import discord
 from discord.ext import commands
 from bot import config as global_cfg
 from core.config import get_guild_config
-from cogs.detection import Detector
-from cogs.actions import execute_actions
+from cogs._detection import Detector
+from cogs._actions import execute_actions
 
 log = logging.getLogger("cogs.monitor")
 

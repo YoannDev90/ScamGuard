@@ -20,7 +20,6 @@
   image_max_size: 5242880, // Max image download size (bytes, 5 MB)
   image_download_timeout: 30, // Seconds to wait for image download
   supported_extensions: [
-    // Image formats accepted for OCR
     ".png",
     ".jpg",
     ".jpeg",
@@ -31,97 +30,70 @@
   ocr_timeout: 30, // Seconds to wait for OCR processing
   max_ocr_length: 2000, // Max characters of OCR text stored / displayed
   language: ["fr", "en"], // OCR languages (easyocr codes)
-  image_url_regex: "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))", // Regex to find image URLs in message text
+  image_url_regex: "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))",
 
   // ------------------------------------------------------------------
   // Image similarity (banned image matching via phash)
   // ------------------------------------------------------------------
-  banned_images_dir: "banned_images", // Directory with reference images to flag
-  banned_images_threshold: 20, // Max phash distance (0-64) to consider a match
-  banned_images_score: 50, // Score contribution when a banned image matches
+  banned_images_dir: "banned_images",
+  banned_images_threshold: 20,
+  banned_images_score: 50,
 
   // ------------------------------------------------------------------
   // Notifications
   // ------------------------------------------------------------------
-  log_channel_names: [
-    // Fallback channel names searched in order
-    "logs",
-    "admin",
-    "alerts",
-    "moderation",
-    "anti-scam",
-  ],
-  alert_channel_id: null, // Direct channel ID for alerts (priority over names)
-  ping_role_id: null, // Role ID to @mention on scam detection
-  dm_author_on_alert: false, // Send a DM to the message author when scam detected
-  dm_message_template: "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.", // Template for DM to author
-  auto_delete: false, // Automatically delete messages flagged as scam
-  cooldown_seconds: 300, // Min seconds between alerts for the same user (5 min)
+  log_channel_names: ["logs", "admin", "alerts", "moderation", "anti-scam"],
+  alert_channel_id: null,
+  ping_role_id: null,
+  dm_author_on_alert: false,
+  dm_message_template: "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.",
+  auto_delete: false,
+  cooldown_seconds: 300,
 
   // ------------------------------------------------------------------
-  // Reaction emojis — per-trigger reactions the bot adds to flagged messages
+  // Reaction emojis
   // ------------------------------------------------------------------
   reactions: {
-    scam: "\u{1F6A8}", // 🚨
-    suspicious: "\u{26A0}\u{FE0F}", // ⚠️
-    banned_image: "\u{1F51E}", // 🔞
-    clear: "\u{2705}", // ✅  Used to clear bot reactions manually
-    community_alert: "\u{1F6A8}", // 🚨  Used for community confirm counting
+    scam: "🚨",
+    suspicious: "⚠️",
+    banned_image: "🔞",
+    clear: "✅",
+    community_alert: "🚨",
   },
 
   // ------------------------------------------------------------------
-  // Embed colours — per-trigger colours for alert embeds (hex)
+  // Embed colours
   // ------------------------------------------------------------------
   embed_colors: {
-    scam: 0xE74C3C,       // red
-    suspicious: 0xE67E22,  // orange
-    banned_image: 0x9B59B6, // purple
-    ok: 0x2ECC71,         // green
-    config: 0x3498DB,     // blue (config panels)
+    scam: 0xE74C3C,
+    suspicious: 0xE67E22,
+    banned_image: 0x9B59B6,
+    ok: 0x2ECC71,
+    config: 0x3498DB,
   },
 
-  embed_dark_red_threshold: 70, // Score >= this → dark red embed instead of red
-  warn_message_default: "Votre message a été signalé.", // Default DM text for warn action
+  embed_dark_red_threshold: 70,
+  warn_message_default: "Votre message a été signalé.",
 
   // ------------------------------------------------------------------
   // Community features
   // ------------------------------------------------------------------
-  community_confirm_count: 3, // Number of alert reactions before auto-notify
-  report_emoji: "\uD83D\uDC6E", // Emoji users click to report a message
-  enable_report: true, // Enable the report-emoji feature
+  community_confirm_count: 3,
+  report_emoji: "👮",
+  enable_report: true,
 
   // ------------------------------------------------------------------
-  // Actions — what the bot does when a trigger fires
-  // Trigger levels: scam, suspicious, banned_image
-  // Action types:
-  //   delete          — Supprimer le message
-  //   warn            — DM d'avertissement à l'auteur
-  //   kick            — Exclure l'auteur
-  //   ban             — Bannir l'auteur
-  //   softban         — Ban + unban (supprime messages récents)
-  //   timeout         — Timeout (duration en minutes)
-  //   notify_channel  — Envoyer alerte dans un salon (channel_id)
-  //   notify_role     — Ping un rôle (role_id) dans le salon d'alerte
-  //   notify_user     — Ping un utilisateur (user_ids)
-  //   add_role        — Ajouter un rôle (role_id)
-  //   remove_role     — Retirer un rôle (role_id)
-  //   log             — Journaliser dans un salon (channel_id)
+  // Actions
   // ------------------------------------------------------------------
   actions: {
-    scam: [
-      // Exemple: { type: "delete" },
-      // Exemple: { type: "notify_channel", channel_id: null },
-    ],
+    scam: [],
     suspicious: [],
-    banned_image: [
-      // Exemple: { type: "delete" },
-      // Exemple: { type: "add_role", role_id: null },
-    ],
+    banned_image: [],
   },
 
   // ------------------------------------------------------------------
   // Debug / misc
   // ------------------------------------------------------------------
-  debug_mode: false, // Enable extra debug-level logging for this cog
-  logging_level: "INFO", // Logging level for this cog (DEBUG, INFO, WARNING, ERROR)
+  debug_mode: false,
+  logging_level: "INFO",
 }
