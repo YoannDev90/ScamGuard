@@ -28,7 +28,7 @@
     ".bmp",
   ],
   ocr_timeout: 30, // Seconds to wait for OCR processing
-  max_ocr_length: 2000, // Max characters of OCR text stored / displayed
+  max_ocr_length: 10000, // Max characters of OCR text stored
   language: ["fr", "en"], // OCR languages (easyocr codes)
   image_url_regex: "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))",
 

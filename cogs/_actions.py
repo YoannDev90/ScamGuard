@@ -11,8 +11,8 @@ from core.config import GuildConfig, get_guild_config
 log = logging.getLogger("cogs.actions")
 
 
-def _build_alert_embed(message: discord.Message, result: dict, gc = None, title: str = None) -> discord.Embed:
-    """Standard alert embed builder."""
+def _build_alert_embed(message: discord.Message, result: dict, gc=None, *, trigger: str = "alert", actions_taken: list[str] | None = None) -> discord.Embed:
+    """Simple alert embed — message content, actions, user, reports."""
     score = result.get("score", 0)
     if gc is None:
         from core.config import get_guild_config
@@ -21,22 +21,26 @@ def _build_alert_embed(message: discord.Message, result: dict, gc = None, title:
     scam_colour = ec.get("scam", 0xE74C3C)
     threshold = gc.get("embed_dark_red_threshold", 70) if gc else 70
     colour = discord.Colour.dark_red() if score >= threshold else discord.Colour(scam_colour)
-    embed = discord.Embed(
-        title=title or f"Scam alert (score: {score})",
-        colour=colour,
-        timestamp=discord.utils.utcnow(),
-    )
+
+    title = {"scam": "🚨 Scam detected", "suspicious": "⚠️ Suspicious message", "banned_image": "🔞 Banned image detected"}.get(trigger, f"🚨 {trigger}")
+
+    embed = discord.Embed(title=title, colour=colour, timestamp=discord.utils.utcnow())
     embed.add_field(name="Author", value=message.author.mention, inline=True)
     embed.add_field(name="Channel", value=message.channel.mention, inline=True)
+
+    content = message.content
+    if content:
+        embed.add_field(name="Message", value=f"```{content[:1000]}```", inline=False)
+
+    if actions_taken:
+        labels = {"delete": "🗑️ Deleted", "warn": "✉️ DM warning", "kick": "👢 Kicked", "ban": "🔨 Banned", "softban": "🔨 Softbanned", "timeout": "⏰ Timed out", "notify_channel": "📢 Channel notified", "notify_role": "📢 Role pinged", "notify_user": "📢 User notified", "add_role": "➕ Role added", "remove_role": "➖ Role removed", "log": "📋 Logged"}
+        desc = "\n".join(f"- {labels.get(a, a)}" for a in actions_taken)
+        embed.add_field(name="Actions", value=desc, inline=False)
+
     factors = result.get("factors", [])
     if factors:
-        embed.add_field(name="Factors", value="\n".join(f"- {f}" for f in factors), inline=False)
-    embed.add_field(name="Message", value=f"[Jump]({message.jump_url})", inline=False)
-    if result.get("ocr_text"):
-        text = result["ocr_text"]
-        if len(text) > 1000:
-            text = text[:997] + "..."
-        embed.add_field(name="OCR text", value=f"```{text}```", inline=False)
+        embed.add_field(name="Reports", value="\n".join(f"- {f}" for f in factors), inline=False)
+
     embed.set_footer(text=f"ID: {message.id}")
     return embed
 
@@ -53,6 +57,9 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
     member = message.author
     guild = message.guild
     reason = result.get("reason", f"ScamGuard: {trigger}")
+
+    action_types = [a.get("type", "?") for a in actions]
+    embed = _build_alert_embed(message, result, gc, trigger=trigger, actions_taken=action_types)
 
     for action in actions:
         atype = action.get("type")
@@ -92,7 +99,6 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 channel_id = action.get("channel_id")
                 target: Optional[discord.TextChannel] = guild.get_channel(channel_id) if channel_id else None
                 if target:
-                    embed = _build_alert_embed(message, result, gc, title=f"🔴 Scam alert ({trigger})")
                     await target.send(embed=embed)
                     log.info("Action: notify #%s (guild %d)", target.name, guild.id)
 
@@ -102,7 +108,6 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 ping = role.mention if role else ""
                 ch_id = gc.get("alert_channel_id")
                 target = guild.get_channel(ch_id) if ch_id else message.channel
-                embed = _build_alert_embed(message, result, gc, title=f"🔴 Scam alert ({trigger})")
                 await target.send(content=ping, embed=embed)
 
             elif atype == "notify_user":
@@ -110,7 +115,6 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 mentions = " ".join(f"<@{uid}>" for uid in user_ids)
                 ch_id = gc.get("alert_channel_id")
                 target = guild.get_channel(ch_id) if ch_id else message.channel
-                embed = _build_alert_embed(message, result, gc, title=f"🔴 Scam alert ({trigger})")
                 await target.send(content=mentions, embed=embed)
 
             elif atype == "add_role":
@@ -131,7 +135,6 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 ch_id = action.get("channel_id") or gc.get("alert_channel_id")
                 target = guild.get_channel(ch_id) if ch_id else None
                 if target:
-                    embed = _build_alert_embed(message, result, gc, title=f"📋 Log: {trigger}")
                     await target.send(embed=embed)
 
         except discord.Forbidden:

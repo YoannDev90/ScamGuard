@@ -154,19 +154,18 @@ class Monitor(commands.Cog, name="Monitor"):
                 ping = role.mention
         score = result.get("score", 0)
         embed = discord.Embed(
-            title=f"Scam alert (score: {score})",
+            title="🚨 Scam detected",
             colour=self._legacy_embed_colour(score, gc),
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name="Author", value=message.author.mention, inline=True)
         embed.add_field(name="Channel", value=message.channel.mention, inline=True)
+        content = message.content
+        if content:
+            embed.add_field(name="Message", value=f"```{content[:1000]}```", inline=False)
         factors = result.get("factors", [])
         if factors:
-            embed.add_field(name="Factors", value="\n".join(f"- {f}" for f in factors), inline=False)
-        embed.add_field(name="Message", value=f"[Jump]({message.jump_url})", inline=False)
-        if result.get("ocr_text"):
-            t = result["ocr_text"]
-            embed.add_field(name="OCR text", value=f"```{t[:997]}```", inline=False)
+            embed.add_field(name="Reports", value="\n".join(f"- {f}" for f in factors), inline=False)
         embed.set_footer(text=f"ID: {message.id}")
         try:
             await target.send(content=ping or None, embed=embed)
@@ -195,18 +194,19 @@ class Monitor(commands.Cog, name="Monitor"):
             channels = gc.get("log_channel_names", ["logs", "admin", "alerts"])
             target = next((c for c in message.guild.text_channels if c.name in channels), message.channel)
         banned = result.get("image_flag", {}).get("banned")
-        reasons = [f"Banned image: {banned['matched']} ({banned['similarity']}%)"] if banned else []
         ec = gc.get("embed_colors", {})
         embed = discord.Embed(
-            title="Banned image detected",
+            title="🔞 Banned image detected",
             colour=discord.Colour(ec.get("banned_image", 0x9B59B6)),
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name="Author", value=message.author.mention, inline=True)
         embed.add_field(name="Channel", value=message.channel.mention, inline=True)
-        if reasons:
-            embed.add_field(name="Reason", value="\n".join(f"- {r}" for r in reasons), inline=False)
-        embed.add_field(name="Message", value=f"[Jump]({message.jump_url})", inline=False)
+        content = message.content
+        if content:
+            embed.add_field(name="Message", value=f"```{content[:1000]}```", inline=False)
+        if banned:
+            embed.add_field(name="Matched", value=f"`{banned['matched']}` ({banned['similarity']}%)", inline=False)
         embed.set_footer(text=f"ID: {message.id}")
         try:
             await target.send(embed=embed)
@@ -236,7 +236,7 @@ class Monitor(commands.Cog, name="Monitor"):
 
         report_emoji = gc.get("report_emoji", "\U0001f46e")
         if gc.get("enable_report", True) and emoji == report_emoji and not any(r.me for r in msg.reactions if str(r.emoji) == report_emoji):
-            await self._legacy_notify(msg, {"score": 0, "is_scam": False, "factors": [f"Reported by <@{payload.user_id}>"], "ocr_text": ""}, gc)
+            await self._legacy_notify(msg, {"score": 0, "is_scam": False, "factors": [f"Reported by <@{payload.user_id}>"]}, gc)
 
         reactions_cfg = gc.get("reactions", {})
         clear_emoji = reactions_cfg.get("clear", "\u2705")
@@ -253,7 +253,7 @@ class Monitor(commands.Cog, name="Monitor"):
         if emoji == alert_emoji:
             count = sum(1 for r in msg.reactions if str(r.emoji) == alert_emoji and r.count > 1)
             if count >= gc.get("community_confirm_count", 3):
-                await self._legacy_notify(msg, {"score": 99, "is_scam": True, "factors": ["Community confirmed"], "ocr_text": ""}, gc)
+                await self._legacy_notify(msg, {"score": 99, "is_scam": True, "factors": ["Community confirmed"]}, gc)
 
 
 async def setup(bot: commands.Bot) -> None:
