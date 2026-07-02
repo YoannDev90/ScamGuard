@@ -485,7 +485,7 @@ class Detector:
     # ── AI multimodal ─────────────────────────────────────────────────
 
     async def _ai_check(self, text: str, gc: GuildConfig) -> int | None:
-        """Optional AI second opinion via configured provider/model. Returns bonus score or None."""
+        """Optional AI second opinion via litellm routing. Returns bonus score or None."""
         if not gc.get("ai_enabled", False):
             return None
         model_name = gc.get("ai_model", "gpt-4o-mini")
@@ -502,58 +502,32 @@ class Detector:
             return None
 
         try:
+            import litellm
             import json as _json
-            headers = {"Content-Type": "application/json"}
+            litellm_model = f"{mc.provider}/{mc.model}"
 
-            if mc.endpoint_type == "responses":
-                headers["Authorization"] = f"Bearer {api_key}"
-                body = {
-                    "model": mc.model,
-                    "input": text[:2000],
-                    "instructions": prompt,
-                    "temperature": 0,
-                    "max_output_tokens": 100,
-                }
-                url = f"{pc.endpoint}/responses"
-
-            elif mc.endpoint_type == "messages":
-                headers["x-api-key"] = api_key
-                headers["anthropic-version"] = "2023-06-01"
-                body = {
-                    "model": mc.model,
-                    "system": prompt,
-                    "messages": [{"role": "user", "content": text[:2000]}],
-                    "max_tokens": 100,
-                    "temperature": 0,
-                }
-                url = f"{pc.endpoint}/messages"
-
-            elif mc.endpoint_type == "moderations":
-                headers["Authorization"] = f"Bearer {api_key}"
-                body = {"input": text[:2000], "model": mc.model}
-                url = f"{pc.endpoint}/moderations"
-
-            else:
-                log.debug("AI: unknown endpoint_type '%s'", mc.endpoint_type)
-                return None
-
-            async with self.session.post(url, headers=headers, json=body, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status != 200:
-                    log.debug("AI API error %d: %s", resp.status, await resp.text())
-                    return None
-                data = await resp.json()
-
-            if mc.endpoint_type == "responses":
-                raw = data.get("output", [{}])[0].get("content", [{}])[0].get("text", "")
-            elif mc.endpoint_type == "messages":
-                raw = data.get("content", [{}])[0].get("text", "")
-            elif mc.endpoint_type == "moderations":
-                results = data.get("results", [])
-                if results and results[0].get("flagged"):
+            if mc.endpoint_type == "moderations":
+                kwargs = dict(model=mc.model, input=text[:2000], api_key=api_key)
+                if mc.provider != "anthropic":
+                    kwargs["api_base"] = pc.endpoint
+                resp = await litellm.amoderation(**kwargs)
+                if resp.results and resp.results[0].flagged:
                     log.info("AI flagged scam (moderation)")
                     return bonus
                 return None
 
+            kwargs = dict(model=litellm_model, api_key=api_key, temperature=0, max_tokens=100)
+            if mc.provider != "anthropic":
+                kwargs["api_base"] = pc.endpoint
+            if mc.endpoint_type == "messages":
+                kwargs["messages"] = [{"role": "user", "content": text[:2000]}]
+                if prompt:
+                    kwargs["system"] = prompt
+            else:
+                kwargs["messages"] = [{"role": "system", "content": prompt}, {"role": "user", "content": text[:2000]}]
+
+            resp = await litellm.acompletion(**kwargs)
+            raw = resp.choices[0].message.content
             if not raw:
                 return None
             m = _JSON_RE.search(raw)

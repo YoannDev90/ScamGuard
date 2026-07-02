@@ -211,6 +211,7 @@ ScamGuard/
 | `easyocr` | OCR images |
 | `Pillow` + `imagehash` | pHash images |
 | `aiohttp` | Téléchargement HTTP |
+| `litellm` | Routing IA (multi-provider) |
 | `whois` | Âge domaine |
 | `python-dotenv` | .env |
 | `colorama` | Logs colorés |
