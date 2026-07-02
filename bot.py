@@ -144,8 +144,9 @@ async def setup_hook() -> None:
     config.load()
     _apply_logging_level()
     await load_cogs()
+    bot.tree.clear_commands(guild=None)
     await bot.tree.sync()
-    log.info("Slash commands synchronised")
+    log.info("Slash commands synchronised (tree cleared + re-synced)")
 
     from core.ai_config import ai_config
     ai_config.load()

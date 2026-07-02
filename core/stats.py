@@ -78,6 +78,23 @@ class StatsManager:
         self.data["actions_taken"] += 1
         self._mark_dirty()
 
+    def get(self, key: str, default=None):
+        return self.data.get(key, default)
+
+    def reset(self) -> None:
+        self.data = {
+            "guild_id": self.guild_id,
+            "first_seen": int(time.time()),
+            "total_scanned": 0,
+            "scam_detected": 0,
+            "suspicious_detected": 0,
+            "banned_images": 0,
+            "actions_taken": 0,
+        }
+        self._save()
+        self._last_flush = time.time()
+        self._dirty = False
+
     def flush(self) -> None:
         if self._dirty:
             self._save()
