@@ -182,6 +182,30 @@ class Config(commands.Cog, name="Config"):
         except Exception as exc:
             await interaction.followup.send(f"Error: {exc}", ephemeral=True)
 
+    # ── Alert channel (quick-setup) ──────────────────────────────────
+
+    @config.command(name="channel", description="Set the alert/log channel (quick setup)")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.describe(channel="Channel for alerts and logs (default: this channel)")
+    async def config_channel(
+        self,
+        interaction: discord.Interaction,
+        channel: Optional[discord.TextChannel] = None,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        target = channel or interaction.channel
+        if not isinstance(target, discord.TextChannel):
+            await interaction.followup.send("Select a text channel.", ephemeral=True)
+            return
+        gc = get_guild_config(interaction.guild_id)
+        gc.set("alert_channel_id", target.id)
+        embed = discord.Embed(
+            title="✅ Alert channel set",
+            description=f"Alerts and logs will be sent to {target.mention}",
+            colour=discord.Colour.green(),
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     # ── Actions ──────────────────────────────────────────────────────
 
     @config.command(name="actions-list", description="List configured actions")
