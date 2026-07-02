@@ -668,6 +668,57 @@ class ConfigSetup(commands.Cog, name="Setup"):
         view = SetupView(state, interaction.guild)
         await view.render(interaction)
 
+    @app_commands.command(name="guide", description="Quick overview: what the bot does and how to use it")
+    async def guide(self, interaction: discord.Interaction) -> None:
+        embed = discord.Embed(
+            title="🛡️ ScamGuard Guide",
+            colour=discord.Colour.blue(),
+            description=(
+                "ScamGuard scans messages for scams using **OCR** (image text recognition) "
+                "and **pattern matching** (regex). When a scam is detected, it can automatically "
+                "delete, warn, kick, ban, timeout, or log — depending on your config."
+            ),
+        )
+        embed.add_field(
+            name="🚀 Quick start",
+            value="Run `/setup` — 4 steps, no IDs needed.",
+            inline=False,
+        )
+        embed.add_field(
+            name="⚙️ Configuration",
+            value=(
+                "`/config show` — View current config\n"
+                "`/config channel` — Set alert channel\n"
+                "`/config set <key> <value>` — Change any setting\n"
+                "`/config get <key>` — Read a setting\n"
+                "`/config actions-add` — Add an action\n"
+                "`/config actions-remove` — Remove an action\n"
+                "`/config patterns-list` — View scam patterns\n"
+                "`/config reset` — Reset guild config"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="🔍 Detection",
+            value=(
+                "**Scam** (score ≥ 50): High-confidence scam — triggers `scam` actions\n"
+                "**Suspicious** (score 30-49): Possible scam — triggers `suspicious` actions\n"
+                "**Banned image** (phash match): Known scam image — triggers `banned_image` actions"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="📌 Permissions needed",
+            value=(
+                "Manage Server users can run `/config` mutations.\n"
+                "The bot needs: View Channels, Send Messages, Read History, "
+                "Manage Messages, Add Reactions, Kick/Ban/Timeout Members, Manage Roles."
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="ScamGuard • Questions? /guide")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Config(bot))
