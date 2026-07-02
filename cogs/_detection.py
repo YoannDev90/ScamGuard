@@ -136,27 +136,33 @@ class Detector:
     # ── Pattern matching ─────────────────────────────────────────────
 
     async def analyze_message(self, message: discord.Message, gc: GuildConfig) -> dict:
-        """Score message against guild patterns.
-
-        Returns {is_scam, score, reason, details, ocr_text, images, factors}.
-        """
+        """Score message against guild patterns."""
         result = {"is_scam": False, "score": 0, "reason": "", "details": "", "ocr_text": "", "images": [], "factors": []}
 
         all_text = (message.content.strip() + "\n") if message.content.strip() else ""
         urls = await self._get_image_urls(message, gc)
         max_size = gc.get("image_max_size", 5242880)
         dl_timeout = gc.get("image_download_timeout", 30)
-        ocr_max = gc.get("max_ocr_length", 2000)
+        ocr_max = gc.get("max_ocr_length", 10000)
+
+        log.debug("analyze msg=%d guild=%d text_len=%d images=%d", message.id, message.guild.id if message.guild else 0, len(all_text.strip()), len(urls))
 
         if urls:
             download_sem = asyncio.Semaphore(10)
 
             async def _dl(url: str) -> tuple[str, bytes | None]:
                 async with download_sem:
-                    return url, await self._download(url, max_size, dl_timeout)
+                    data = await self._download(url, max_size, dl_timeout)
+                    if data:
+                        log.debug("Downloaded %s (%d bytes)", url, len(data))
+                    else:
+                        log.debug("Download failed %s", url)
+                    return url, data
 
             downloaded = await asyncio.gather(*[_dl(u) for u in urls])
             tasks = [self._ocr_bytes(d, ocr_max) for _, d in downloaded if d is not None]
+            if tasks:
+                log.debug("Running OCR on %d images in parallel", len(tasks))
             ocr_results = await asyncio.gather(*tasks) if tasks else []
             for text in ocr_results:
                 if text:
@@ -165,21 +171,29 @@ class Detector:
 
         all_text = all_text.strip()
         if not all_text:
+            log.debug("No text to analyze msg=%d", message.id)
             return result
 
         factors: list[tuple[str, int]] = []
         details: list[str] = []
+        matched = 0
+        compiled = gc.get_compiled_patterns()
+        log.debug("Scanning %d patterns against msg=%d", len(compiled), message.id)
 
-        for name, pattern, weight, enabled in gc.get_compiled_patterns():
+        for name, pattern, weight, enabled in compiled:
             if pattern.search(all_text):
                 factors.append((name, weight))
                 details.append(f"{name} ({weight})")
-                log.debug("Pattern matched msg %d: %s (weight %d)", message.id, name, weight)
+                matched += 1
+                log.debug("Pattern hit msg=%d: '%s' (w=%d)", message.id, name, weight)
+
+        log.debug("Pattern matches for msg=%d: %d/%d", message.id, matched, len(compiled))
 
         if not message.content.strip() and result["ocr_text"] and factors:
             bonus = gc.get("no_text_bonus", 10)
             factors.append(("no_text", bonus))
             details.append(f"no_text (+{bonus})")
+            log.debug("No-text bonus +%d msg=%d", bonus, message.id)
 
         total = sum(w for _, w in factors)
         result["score"] = total
@@ -192,9 +206,11 @@ class Detector:
             result["is_scam"] = True
             result["reason"] = f"Score {total}\n" + "\n".join(details)
             result["details"] = "\n".join(details)
+            log.info("SCAM msg=%d score=%d/%d patterns=%d", message.id, total, score_alert, matched)
         elif total >= score_warn:
             result["reason"] = f"Score {total} (warning)"
             result["details"] = "\n".join(details)
+            log.info("SUSPICIOUS msg=%d score=%d/%d", message.id, total, score_warn)
         else:
             result["reason"] = f"Score {total}"
 
@@ -206,12 +222,18 @@ class Detector:
         try:
             async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                 if resp.status != 200:
+                    log.debug("Download HTTP %d: %s", resp.status, url)
                     return None
                 data = await resp.read()
                 if len(data) > max_size:
+                    log.debug("Download oversized %d > %d: %s", len(data), max_size, url)
                     return None
                 return data
-        except Exception:
+        except asyncio.TimeoutError:
+            log.debug("Download timeout %ds: %s", timeout, url)
+            return None
+        except aiohttp.ClientError as exc:
+            log.debug("Download error %s: %s", url, exc)
             return None
 
     async def _get_image_urls(self, msg: discord.Message, gc: GuildConfig) -> list[str]:
@@ -231,4 +253,6 @@ class Detector:
             for m in re.finditer(img_re, msg.content, re.I):
                 if m.group(1) not in urls:
                     urls.append(m.group(1))
+        if urls:
+            log.debug("Found %d image URLs in msg=%d", len(urls), msg.id)
         return urls

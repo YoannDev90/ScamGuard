@@ -79,17 +79,25 @@ class Monitor(commands.Cog, name="Monitor"):
 
         gc = get_guild_config(message.guild.id)
 
-        if message.author.id in gc.get_ignored("user_ids"):
+        uid, cid, gid = message.author.id, message.channel.id, message.guild.id
+
+        if uid in gc.get_ignored("user_ids"):
+            log.debug("Ignored user %d in guild=%d", uid, gid)
             return
-        if message.channel.id in gc.get_ignored("channel_ids"):
+        if cid in gc.get_ignored("channel_ids"):
+            log.debug("Ignored channel %d in guild=%d", cid, gid)
             return
-        if any(role.id in gc.get_ignored("role_ids") for role in message.author.roles):
+        ignored_roles = [r.id for r in message.author.roles if r.id in gc.get_ignored("role_ids")]
+        if ignored_roles:
+            log.debug("Ignored roles %s user=%d guild=%d", ignored_roles, uid, gid)
             return
 
         min_len = gc.get("message_min_length", 15)
         urls = await self.detector._get_image_urls(message, gc)
         if not urls and len(message.content.strip()) < min_len:
             return
+
+        log.debug("Analyzing msg=%d author=%d guild=%d content_len=%d urls=%d", message.id, uid, gid, len(message.content), len(urls))
 
         result = await self.detector.analyze_message(message, gc)
 
@@ -115,9 +123,12 @@ class Monitor(commands.Cog, name="Monitor"):
                 result.setdefault("factors", []).append(
                     f"banned_image ({match['matched']}, {match['similarity']}%)"
                 )
-                log.warning("Banned image msg %d | guild=%d | matched=%s", message.id, message.guild.id, match["matched"])
+                log.warning("Banned image msg=%d guild=%d matched=%s sim=%s", message.id, gid, match["matched"], match["similarity"])
+            else:
+                log.debug("No banned image match msg=%d guild=%d urls=%d", message.id, gid, len(urls))
 
         triggered = result["is_scam"] or bool(result.get("image_flag"))
+        log.debug("Detection result msg=%d triggered=%s score=%d factors=%s", message.id, triggered, result["score"], result.get("factors", []))
 
         if not triggered:
             return
@@ -129,21 +140,27 @@ class Monitor(commands.Cog, name="Monitor"):
         reactions_cfg = gc.get("reactions", {})
         try:
             if result.get("image_flag"):
-                await message.add_reaction(reactions_cfg.get("banned_image", "\U0001f51e"))
+                emoji = reactions_cfg.get("banned_image", "\U0001f51e")
+                await message.add_reaction(emoji)
+                log.debug("Reaction %s added msg=%d (banned)", emoji, message.id)
             else:
-                await message.add_reaction(reactions_cfg.get("scam", "\U0001f6a8"))
-        except discord.HTTPException:
-            pass
+                emoji = reactions_cfg.get("scam", "\U0001f6a8")
+                await message.add_reaction(emoji)
+                log.debug("Reaction %s added msg=%d (scam)", emoji, message.id)
+        except discord.HTTPException as exc:
+            log.debug("Reaction failed msg=%d: %s", message.id, exc)
 
         # Cooldown
         cd = gc.get("cooldown_seconds", 300)
         now = message.created_at.timestamp()
-        if now - self._cooldowns.get(message.author.id, 0) < cd:
+        last = self._cooldowns.get(uid, 0)
+        if now - last < cd:
+            log.debug("Cooldown active for user=%d (%ds remaining)", uid, int(cd - (now - last)))
             return
-        self._cooldowns[message.author.id] = now
+        self._cooldowns[uid] = now
         self._clean_cooldowns()
 
-        log.warning("Scam msg %d | guild=%d | score=%d", message.id, message.guild.id, result["score"])
+        log.warning("DETECTED guild=%d msg=%d author=%d score=%d", gid, message.id, uid, result["score"])
 
         # One alert embed
         await self._send_alert(message, result, gc)

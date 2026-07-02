@@ -45,20 +45,35 @@ class ColouredFormatter(logging.Formatter):
         return super().format(record)
 
 
-# Take full control of the root logger (discord.basicConfig adds its own handler)
+# ── Logging: file + console, our logs only ─────────────────────────
 root = logging.getLogger()
 for h in root.handlers[:]:
     root.removeHandler(h)
 
-handler = logging.StreamHandler()
-handler.setFormatter(
-    ColouredFormatter(
-        "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%H:%M:%S",
-    )
-)
-root.addHandler(handler)
-root.setLevel(logging.INFO)
+_fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_datefmt = "%Y-%m-%d %H:%M:%S"
+
+console = logging.StreamHandler()
+console.setFormatter(ColouredFormatter(_fmt, datefmt=_datefmt))
+root.addHandler(console)
+
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+from logging.handlers import TimedRotatingFileHandler
+file_h = TimedRotatingFileHandler(log_dir / "scanguard.log", when="midnight", backupCount=14, encoding="utf-8")
+file_h.setFormatter(logging.Formatter(_fmt, datefmt=_datefmt))
+root.addHandler(file_h)
+
+root.setLevel(logging.DEBUG)
+# Keep discord/voice libs quiet
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+logging.getLogger("discord.client").setLevel(logging.WARNING)
+logging.getLogger("discord.http").setLevel(logging.WARNING)
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("easyocr").setLevel(logging.WARNING)
+logging.getLogger("torch").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
@@ -260,10 +275,11 @@ async def on_guild_remove(guild: discord.Guild) -> None:
 
 
 def _apply_logging_level() -> None:
-    """Set root logging level from settings, affecting all loggers."""
+    """Set our loggers level from settings."""
     level_name = config.get("logging_level", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    logging.getLogger().setLevel(level)
+    for name in ("bot", "core", "cogs"):
+        logging.getLogger(name).setLevel(level)
     log.info("Logging level set to %s", level_name)
 
 
