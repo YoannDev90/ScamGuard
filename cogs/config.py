@@ -46,6 +46,11 @@ KNOWN_SETTINGS = [
     "community_confirm_count", "report_emoji", "enable_report",
     "reactions", "embed_colors", "embed_dark_red_threshold", "warn_message_default",
     "debug_mode", "logging_level",
+    "signal_account_age_days", "signal_account_age_score",
+    "signal_join_age_days", "signal_join_age_score",
+    "signal_first_interaction_score",
+    "signal_image_only_score", "signal_no_avatar_score",
+    "signal_crosspost_score", "signal_crosspost_window", "signal_crosspost_min_channels",
 ]
 
 

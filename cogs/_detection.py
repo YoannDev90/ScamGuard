@@ -1,4 +1,4 @@
-"""Detection engine: OCR, image similarity, keyword scoring."""
+"""Detection engine: OCR, image similarity, keyword scoring, user signals."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +18,10 @@ log = logging.getLogger("cogs.detection")
 
 _OCR_CACHE_DIR = Path("data/ocr_cache")
 _MEMO_OCR: dict[str, str] = {}
+# Cross-post tracker: {content_hash: [(channel_id, timestamp)]}
+_crosspost: dict[str, list[tuple[int, float]]] = {}
+# First-interaction tracker
+_seen_users: set[int] = set()
 
 
 def _ocr_cache_key(data: bytes) -> str:
@@ -186,6 +191,68 @@ class Detector:
                     urls.append(m.group(1))
         return urls
 
+    # ── User signals ──────────────────────────────────────────────────
+
+    def _compute_user_signals(self, message: discord.Message, gc: GuildConfig, has_urls: bool) -> list[tuple[str, int]]:
+        """Compute behavioural signals about the user/message for bonus score."""
+        signals: list[tuple[str, int]] = []
+        now = discord.utils.utcnow()
+
+        # Account age
+        min_days = gc.get("signal_account_age_days", 30)
+        score = gc.get("signal_account_age_score", 15)
+        if score and min_days:
+            age = (now - message.author.created_at).days
+            if age < min_days:
+                signals.append((f"account_age_{age}d", score))
+                log.debug("Signal: account age %dd < %dd (+%d) uid=%d", age, min_days, score, message.author.id)
+
+        # Server join age
+        min_days = gc.get("signal_join_age_days", 7)
+        score = gc.get("signal_join_age_score", 15)
+        if score and min_days and message.author.joined_at:
+            age = (now - message.author.joined_at).days
+            if age < min_days:
+                signals.append((f"join_age_{age}d", score))
+                log.debug("Signal: join age %dd < %dd (+%d) uid=%d", age, min_days, score, message.author.id)
+
+        # First interaction
+        score = gc.get("signal_first_interaction_score", 10)
+        if score and message.author.id not in _seen_users:
+            _seen_users.add(message.author.id)
+            signals.append(("first_interaction", score))
+            log.debug("Signal: first interaction (+%d) uid=%d", score, message.author.id)
+
+        # Image/URL-only (no author text)
+        score = gc.get("signal_image_only_score", 10)
+        if score and has_urls and not message.content.strip():
+            signals.append(("image_only", score))
+            log.debug("Signal: image only (+%d) uid=%d", score, message.author.id)
+
+        # Default avatar
+        score = gc.get("signal_no_avatar_score", 5)
+        if score and message.author.avatar is None:
+            signals.append(("no_avatar", score))
+            log.debug("Signal: no avatar (+%d) uid=%d", score, message.author.id)
+
+        # Cross-posting detection
+        score_pp = gc.get("signal_crosspost_score", 20)
+        window = gc.get("signal_crosspost_window", 300)
+        min_ch = gc.get("signal_crosspost_min_channels", 2)
+        if score_pp and window and message.content.strip():
+            h = hashlib.sha256(message.content.strip().lower().encode()).hexdigest()[:16]
+            ts = time.time()
+            entries = _crosspost.setdefault(h, [])
+            # Prune old
+            entries[:] = [(cid, t) for cid, t in entries if ts - t < window]
+            entries.append((message.channel.id, ts))
+            unique = len({cid for cid, _ in entries})
+            if unique >= min_ch:
+                signals.append((f"crosspost_{unique}ch", score_pp))
+                log.debug("Signal: crosspost %d channels (+%d) uid=%d", unique, score_pp, message.author.id)
+
+        return signals
+
     # ── Main analysis ────────────────────────────────────────────────
 
     async def analyze_message(self, message: discord.Message, gc: GuildConfig) -> dict:
@@ -253,6 +320,12 @@ class Detector:
             bonus = gc.get("no_text_bonus", 10)
             factors.append(("no_text", bonus))
             details.append(f"no_text (+{bonus})")
+
+        # User behavioural signals
+        user_signals = self._compute_user_signals(message, gc, bool(urls))
+        for name, s in user_signals:
+            factors.append((name, s))
+            details.append(f"{name} (+{s})")
 
         total = result["score"] + sum(w for _, w in factors)
         result["score"] = total

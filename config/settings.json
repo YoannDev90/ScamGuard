@@ -48,5 +48,16 @@
     "banned_image": []
   },
   "debug_mode": true,
-  "logging_level": "DEBUG"
+  "logging_level": "DEBUG",
+
+  "signal_account_age_days": 30,
+  "signal_account_age_score": 15,
+  "signal_join_age_days": 7,
+  "signal_join_age_score": 15,
+  "signal_first_interaction_score": 10,
+  "signal_image_only_score": 10,
+  "signal_no_avatar_score": 5,
+  "signal_crosspost_score": 20,
+  "signal_crosspost_window": 300,
+  "signal_crosspost_min_channels": 2
 }
