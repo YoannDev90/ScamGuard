@@ -12,7 +12,7 @@ Analyse automatique des messages et images pour détecter : giveaways, vol de se
 4. **Images interdites** : hash perceptuel (pHash) sur `banned_images/`
 5. **Signaux utilisateur** : âge compte, âge serveur, première interaction, cross-posting, avatar, image-only
 6. **URL** : shorteners, TLD suspects, IP-based, âge domaine (whois), whitelist
-7. **IA** (optionnel) : second avis via LLM (litellm, désactivé par défaut)
+7. **IA** (optionnel) : second avis via LLM (provider OpenAI/Anthropic configurable, désactivé par défaut)
 8. **Score total** → alerte si ≥ seuil
 
 ### Système de score
@@ -154,6 +154,9 @@ python bot.py --light   # Skip préchargement OCR
 |---------|-------------|
 | `config/keywords.json` | Mots-clés (poids, description) |
 | `config/settings.json` | Paramètres globaux |
+| `config/providers.json` | Providers IA (endpoint, env_key) |
+| `config/models.json` | Modèles IA (provider, vision, endpoint_type) |
+| `config/prompts/` | Prompts IA (anglais, par endpoint) |
 | `banned_images/` | Images de référence (pHash) |
 | `data/guilds/` | Config par serveur |
 | `data/stats/` | Statistiques de détection |
@@ -209,7 +212,6 @@ ScamGuard/
 | `Pillow` + `imagehash` | pHash images |
 | `aiohttp` | Téléchargement HTTP |
 | `whois` | Âge domaine |
-| `litellm` | IA multimodale (optionnel) |
 | `python-dotenv` | .env |
 | `colorama` | Logs colorés |
 

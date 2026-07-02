@@ -1,0 +1,38 @@
+{
+  "gpt-4o-mini": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "vision": true,
+    "endpoint_type": "responses"
+  },
+  "gpt-4o": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "vision": true,
+    "endpoint_type": "responses"
+  },
+  "o3-mini": {
+    "provider": "openai",
+    "model": "o3-mini",
+    "vision": false,
+    "endpoint_type": "responses"
+  },
+  "claude-3-5-haiku": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-latest",
+    "vision": true,
+    "endpoint_type": "messages"
+  },
+  "claude-3-5-sonnet": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-latest",
+    "vision": true,
+    "endpoint_type": "messages"
+  },
+  "omni-moderation-latest": {
+    "provider": "openai",
+    "model": "omni-moderation-latest",
+    "vision": false,
+    "endpoint_type": "moderations"
+  }
+}

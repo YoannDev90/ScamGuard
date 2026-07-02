@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 import discord
+from core.ai_config import ai_config
 from core.config import GuildConfig, config as global_cfg
 
 log = logging.getLogger("cogs.detection")
@@ -484,31 +485,81 @@ class Detector:
     # ── AI multimodal ─────────────────────────────────────────────────
 
     async def _ai_check(self, text: str, gc: GuildConfig) -> int | None:
-        """Optional LLM-based second opinion. Returns bonus score or None."""
+        """Optional AI second opinion via configured provider/model. Returns bonus score or None."""
         if not gc.get("ai_enabled", False):
             return None
-        model = gc.get("ai_model", "gpt-4o-mini")
+        model_name = gc.get("ai_model", "gpt-4o-mini")
         bonus = gc.get("ai_score_bonus", 30)
+        mc, pc, prompt = ai_config.resolve_model(model_name)
+        if not mc or not pc:
+            log.debug("AI: model '%s' or its provider not found in config", model_name)
+            return None
+
+        import os
+        api_key = os.environ.get(pc.env_key)
+        if not api_key:
+            log.debug("AI: env var '%s' not set for provider '%s'", pc.env_key, mc.provider)
+            return None
+
         try:
-            import litellm
             import json as _json
-            resp = await litellm.acompletion(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "Detect crypto scam. Respond JSON only: {\"scam\":true/false,\"reason\":\"\"}"},
-                    {"role": "user", "content": text[:2000]},
-                ],
-                max_tokens=50,
-                temperature=0,
-            )
-            msg = resp.choices[0].message
-            if not msg or not msg.content:
+            headers = {"Content-Type": "application/json"}
+
+            if mc.endpoint_type == "responses":
+                headers["Authorization"] = f"Bearer {api_key}"
+                body = {
+                    "model": mc.model,
+                    "input": text[:2000],
+                    "instructions": prompt,
+                    "temperature": 0,
+                    "max_output_tokens": 100,
+                }
+                url = f"{pc.endpoint}/responses"
+
+            elif mc.endpoint_type == "messages":
+                headers["x-api-key"] = api_key
+                headers["anthropic-version"] = "2023-06-01"
+                body = {
+                    "model": mc.model,
+                    "system": prompt,
+                    "messages": [{"role": "user", "content": text[:2000]}],
+                    "max_tokens": 100,
+                    "temperature": 0,
+                }
+                url = f"{pc.endpoint}/messages"
+
+            elif mc.endpoint_type == "moderations":
+                headers["Authorization"] = f"Bearer {api_key}"
+                body = {"input": text[:2000], "model": mc.model}
+                url = f"{pc.endpoint}/moderations"
+
+            else:
+                log.debug("AI: unknown endpoint_type '%s'", mc.endpoint_type)
                 return None
-            body = msg.content.strip()
-            m = _JSON_RE.search(body)
+
+            async with self.session.post(url, headers=headers, json=body, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status != 200:
+                    log.debug("AI API error %d: %s", resp.status, await resp.text())
+                    return None
+                data = await resp.json()
+
+            if mc.endpoint_type == "responses":
+                raw = data.get("output", [{}])[0].get("content", [{}])[0].get("text", "")
+            elif mc.endpoint_type == "messages":
+                raw = data.get("content", [{}])[0].get("text", "")
+            elif mc.endpoint_type == "moderations":
+                results = data.get("results", [])
+                if results and results[0].get("flagged"):
+                    log.info("AI flagged scam (moderation)")
+                    return bonus
+                return None
+
+            if not raw:
+                return None
+            m = _JSON_RE.search(raw)
             if m:
-                body = m.group(0)
-            parsed = _json.loads(body)
+                raw = m.group(0)
+            parsed = _json.loads(raw)
             if parsed.get("scam"):
                 log.info("AI flagged scam: %s", parsed.get("reason", ""))
                 return bonus

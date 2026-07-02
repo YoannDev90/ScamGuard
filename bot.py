@@ -147,6 +147,9 @@ async def setup_hook() -> None:
     await bot.tree.sync()
     log.info("Slash commands synchronised")
 
+    from core.ai_config import ai_config
+    ai_config.load()
+    log.info("AI config loaded")
     from cogs._detection import _load_session
     _load_session()
     log.info("Session data loaded")
