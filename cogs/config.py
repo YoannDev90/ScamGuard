@@ -576,7 +576,7 @@ class SetupView(discord.ui.View):
             )
             embed.set_footer(text="Step 1/4 — Click Next to start")
             self.add_item(NavButton("▶️ Next", "next", self))
-            await interaction.response.edit_message(embed=embed, view=self)
+            await interaction.edit_original_response(embed=embed, view=self)
 
         elif state.step == 1:
             embed = discord.Embed(
@@ -732,6 +732,7 @@ class ConfigSetup(commands.Cog, name="Setup"):
         state = SetupState(interaction.guild_id, interaction.user.id)
         _wizards[interaction.guild_id] = state
         view = SetupView(state, interaction.guild)
+        await interaction.response.defer(ephemeral=True)
         await view.render(interaction)
 
     @app_commands.command(name="guide", description="Quick overview: what the bot does and how to use it")
