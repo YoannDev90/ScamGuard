@@ -54,6 +54,7 @@ KNOWN_SETTINGS = [
     "url_shorteners", "suspect_tlds",
     "url_new_domain_days", "url_new_domain_score",
     "url_shortener_score", "url_ip_score", "url_suspect_tld_score", "url_max_score",
+    "ai_enabled", "ai_model", "ai_score_bonus",
 ]
 
 

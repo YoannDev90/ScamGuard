@@ -9,6 +9,7 @@ import time
 import discord
 from discord.ext import commands
 from core.config import get_guild_config
+from core.stats import get_stats
 from cogs._detection import Detector
 from cogs._actions import execute_actions, _build_alert_embed
 
@@ -104,6 +105,18 @@ class Monitor(commands.Cog, name="Monitor"):
         result = await self.detector.analyze_message(message, gc)
         triggered = result["is_scam"] or bool(result.get("image_flag"))
 
+        # Record stats
+        sm = get_stats(gid)
+        sm.increment_scanned()
+        if triggered:
+            if result.get("image_flag"):
+                sm.increment_banned_image()
+            elif result["is_scam"]:
+                sm.increment_scam()
+        elif result["score"] >= gc.get("score_warn", 30):
+            sm.increment_suspicious()
+        sm.flush()
+
         if not triggered:
             return
 
@@ -127,6 +140,8 @@ class Monitor(commands.Cog, name="Monitor"):
 
         # Execute actions + alert
         await execute_actions("scam", message, result)
+        sm.increment_actions()
+        sm.flush()
         self._cooldowns[uid] = now
         self._clean_cooldowns()
         log.warning("DETECTED guild=%d msg=%d author=%d score=%d", gid, message.id, uid, result["score"])

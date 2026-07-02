@@ -85,6 +85,82 @@ class Core(commands.Cog, name="Core"):
             embed.add_field(name="OCR", value=f"```{result['ocr_text'][:500]}```", inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    # ── Scan ─────────────────────────────────────────────────────────
+
+    @app_commands.command(name="scan", description="Scan recent messages in a channel")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.describe(
+        channel="Channel to scan (default: current)",
+        limit="Number of messages to scan (max 200, default 50)",
+    )
+    async def scan(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel = None,
+        limit: int = 50,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        channel = channel or interaction.channel
+
+        monitor = self.bot.get_cog("Monitor")
+        if not monitor:
+            await interaction.followup.send("Monitor not loaded.", ephemeral=True)
+            return
+
+        from core.config import get_guild_config
+        gc = get_guild_config(interaction.guild_id)
+        limit = min(limit, 200)
+
+        status = await interaction.followup.send(f"Scanning {limit} messages in {channel.mention} …", ephemeral=True)
+
+        total = 0
+        scanned = 0
+        scam_count = 0
+        suspicious_count = 0
+        banned_count = 0
+        errors = 0
+
+        async for msg in channel.history(limit=limit):
+            total += 1
+            if msg.author.bot:
+                continue
+            ignored_roles = gc.get_ignored("role_ids")
+            if msg.author.id in gc.get_ignored("user_ids") or msg.channel.id in gc.get_ignored("channel_ids"):
+                continue
+            if any(r.id in ignored_roles for r in msg.author.roles):
+                continue
+
+            try:
+                result = await monitor.detector.analyze_message(msg, gc)
+                scanned += 1
+                if result.get("image_flag"):
+                    banned_count += 1
+                elif result["is_scam"]:
+                    scam_count += 1
+                elif result["score"] >= gc.get("score_warn", 30):
+                    suspicious_count += 1
+            except Exception:
+                errors += 1
+
+            if total % 25 == 0:
+                await status.edit(content=f"Scanning… {total}/{limit} ({scanned} analyzed)")
+
+        embed = discord.Embed(
+            title=f"✅ Scan complete — {channel.name}",
+            colour=discord.Colour.blue(),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(name="Messages checked", value=str(total), inline=True)
+        if scanned != total:
+            embed.add_field(name="Skipped (bots/ignored)", value=str(total - scanned), inline=True)
+        embed.add_field(name="Scams detected", value=str(scam_count), inline=True)
+        embed.add_field(name="Suspicious", value=str(suspicious_count), inline=True)
+        embed.add_field(name="Banned images", value=str(banned_count), inline=True)
+        if errors:
+            embed.add_field(name="Errors", value=str(errors), inline=True)
+        embed.set_footer(text=f"Limit: {limit}")
+        await status.edit(content=None, embed=embed)
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Core(bot))

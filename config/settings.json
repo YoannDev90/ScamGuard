@@ -68,5 +68,9 @@
   "url_shortener_score": 15,
   "url_ip_score": 20,
   "url_suspect_tld_score": 10,
-  "url_max_score": 50
+  "url_max_score": 50,
+
+  "ai_enabled": false,
+  "ai_model": "gpt-4o-mini",
+  "ai_score_bonus": 30
 }

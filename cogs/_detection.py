@@ -411,6 +411,39 @@ class Detector:
 
         return signals
 
+    # ── AI multimodal ─────────────────────────────────────────────────
+
+    async def _ai_check(self, text: str, gc: GuildConfig) -> int | None:
+        """Optional LLM-based second opinion. Returns bonus score or None."""
+        if not gc.get("ai_enabled", False):
+            return None
+        model = gc.get("ai_model", "gpt-4o-mini")
+        bonus = gc.get("ai_score_bonus", 30)
+        import os
+        if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
+            return None
+        try:
+            import litellm
+            resp = await litellm.acompletion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "Detect crypto scam. Respond JSON only: {\"scam\":true/false,\"reason\":\"\"}"},
+                    {"role": "user", "content": text[:2000]},
+                ],
+                max_tokens=50,
+                temperature=0,
+            )
+            import json as _json
+            body = resp.choices[0].message.content.strip()
+            body = body.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            parsed = _json.loads(body)
+            if parsed.get("scam"):
+                log.info("AI flagged scam: %s", parsed.get("reason", ""))
+                return bonus
+        except Exception:
+            log.debug("AI check failed", exc_info=True)
+        return None
+
     # ── Main analysis ────────────────────────────────────────────────
 
     async def analyze_message(self, message: discord.Message, gc: GuildConfig) -> dict:
@@ -490,6 +523,13 @@ class Detector:
         for name, s in url_factors:
             factors.append((name, s))
             details.append(f"{name} (+{s})")
+
+        # AI second opinion (optional)
+        if all_text:
+            ai_bonus = await self._ai_check(all_text, gc)
+            if ai_bonus:
+                factors.append(("ai_verdict", ai_bonus))
+                details.append(f"ai_verdict (+{ai_bonus})")
 
         total = result["score"] + sum(w for _, w in factors)
         result["score"] = total
