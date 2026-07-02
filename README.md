@@ -12,8 +12,9 @@ Analyse automatique des messages et images pour détecter : giveaways, vol de se
 4. **Images interdites** : hash perceptuel (pHash) sur `banned_images/`
 5. **Signaux utilisateur** : âge compte, âge serveur, première interaction, cross-posting, avatar, image-only
 6. **URL** : shorteners, TLD suspects, IP-based, âge domaine (whois), whitelist
-7. **IA** (optionnel) : second avis via LLM (provider OpenAI/Anthropic configurable, désactivé par défaut)
-8. **Score total** → alerte si ≥ seuil
+7. **IA** (optionnel) : second avis via LLM (provider configurable, prompts dédiés, désactivé par défaut)
+8. **Nettoyage** : si action `delete`, supprime les messages récents du même user dans tous les salons
+9. **Score total** → alerte si ≥ seuil
 
 ### Système de score
 
@@ -37,6 +38,7 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 | `/test-detect <id>` | Analyse un message (admin) |
 | `/scan [channel] [limit]` | Scan rétroactif (admin, défaut 50, max 200) |
 | `/stats` | Statistiques de détection |
+| `/stats-reset` | Réinitialise les stats (admin) |
 
 ### Configuration (`/config`)
 
@@ -74,6 +76,9 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 | `whitelist-domain add <domain>` | Ajoute un domaine |
 | `whitelist-domain remove <domain>` | Supprime |
 | `whitelist-domains` | Liste |
+| `whitelist-user add <user>` | Ajoute un user (/test-detect) |
+| `whitelist-user remove <user>` | Supprime |
+| `whitelist-users` | Liste |
 
 **Ignorer :**
 
@@ -112,6 +117,10 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 | `log` | channel | send_messages |
 
 Le bot vérifie ses permissions avant chaque action. Action sautée si permission manquante.
+
+**Cooldown** : `cooldown_seconds` évite uniquement le spam d'alerte dans le salon. Les actions sont toujours exécutées sur chaque message détecté.
+
+**Batch cleanup** : si l'action `delete` est configurée, le bot supprime automatiquement les messages récents (30 derniers) du même utilisateur dans **tous les salons** du serveur.
 
 ## Installation
 
@@ -160,6 +169,7 @@ python bot.py --light   # Skip préchargement OCR
 | `banned_images/` | Images de référence (pHash) |
 | `data/guilds/` | Config par serveur |
 | `data/stats/` | Statistiques de détection |
+| `data/session/` | Session persistée (seen_users, crosspost) |
 | `logs/` | Logs journaliers |
 
 ### Paramètres principaux
@@ -172,7 +182,7 @@ python bot.py --light   # Skip préchargement OCR
 | Signaux | `signal_account_age_days`, `signal_first_interaction_score` |
 | URL | `url_shorteners`, `suspect_tlds`, `url_new_domain_days` |
 | IA | `ai_enabled` (false), `ai_model`, `ai_score_bonus` |
-| UX | `cooldown_seconds`, `auto_delete`, `dm_author_on_alert` |
+| UX | `cooldown_seconds` (alerte only), `auto_delete`, `dm_author_on_alert` |
 
 ## Structure
 
@@ -188,14 +198,19 @@ ScamGuard/
 │   └── stats.py            # /stats
 ├── core/
 │   ├── config.py           # ConfigManager, GuildConfig, VersionManager
-│   └── stats.py            # StatsManager
+│   ├── stats.py            # StatsManager
+│   └── ai_config.py        # AiConfig (providers, models, prompts)
 ├── config/
 │   ├── keywords.json       # Mots-clés pondérés
-│   └── settings.json       # Paramètres globaux
+│   ├── settings.json       # Paramètres globaux
+│   ├── providers.json      # Providers IA
+│   ├── models.json         # Modèles IA
+│   └── prompts/            # Prompts IA (anglais)
 ├── banned_images/          # Images de référence (phash)
 ├── data/
 │   ├── guilds/             # Config par guild
 │   ├── stats/              # Stats par guild
+│   ├── session/            # Session persistée
 │   └── ocr_cache/          # Cache OCR disque
 ├── logs/                   # Logs
 ├── requirements.txt
