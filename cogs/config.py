@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from pathlib import Path
 from typing import Optional
 
 import discord
@@ -401,6 +403,70 @@ class Config(commands.Cog, name="Config"):
         gc = get_guild_config(interaction.guild_id)
         gc.reset()
         await interaction.followup.send("Config reset to defaults.", ephemeral=True)
+
+    # ── Banned image ─────────────────────────────────────────────────
+
+    @config.command(name="banned-add", description="Add a banned image (phash) by upload or URL")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.describe(
+        image="Upload the image file",
+        url="Or paste an image URL",
+        name="Optional file name (default: timestamp)",
+    )
+    async def config_banned_add(
+        self,
+        interaction: discord.Interaction,
+        image: Optional[discord.Attachment] = None,
+        url: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+
+        if not image and not url:
+            await interaction.followup.send("Upload an image or provide a URL.", ephemeral=True)
+            return
+
+        try:
+            if image:
+                data = await image.read()
+            else:
+                monitor = self.bot.get_cog("Monitor")
+                if not monitor:
+                    await interaction.followup.send("Detection system not ready.", ephemeral=True)
+                    return
+                data = await monitor.detector._download(url, max_size=10_485_760)
+                if not data:
+                    await interaction.followup.send("Failed to download image from URL.", ephemeral=True)
+                    return
+
+            from PIL import Image as PILImage
+            import imagehash
+            import io
+
+            img = PILImage.open(io.BytesIO(data))
+            h = imagehash.phash(img)
+
+            banned_dir = Path("banned_images")
+            banned_dir.mkdir(exist_ok=True)
+            fname = name or f"manual_{interaction.user.id}_{int(time.time())}"
+            safe = "".join(c for c in fname if c.isalnum() or c in "._-") or "image"
+            path = banned_dir / f"{safe}.png"
+            img.save(path, "PNG")
+
+            detector = self.bot.get_cog("Monitor")
+            if detector:
+                detector.detector._banned_hashes_cache = None
+
+            embed = discord.Embed(title="✅ Banned image added", colour=discord.Colour.green())
+            embed.add_field(name="File", value=f"`{path.name}`", inline=True)
+            embed.add_field(name="phash", value=f"`{h}`", inline=True)
+            embed.add_field(name="Size", value=f"{img.size[0]}×{img.size[1]}", inline=True)
+            embed.set_thumbnail(url="attachment://image.png")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        except Exception as exc:
+            log.exception("banned-add failed")
+            await interaction.followup.send(f"Error: {exc}", ephemeral=True)
 
     # ── Reload ───────────────────────────────────────────────────────
 
