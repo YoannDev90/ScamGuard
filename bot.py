@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import atexit
 import logging
 import os
@@ -149,6 +150,18 @@ async def setup_hook() -> None:
     from cogs._detection import _load_session
     _load_session()
     log.info("Session data loaded")
+
+    # Background flush every 30s (safe against SIGKILL)
+    async def _periodic_flush():
+        while True:
+            await asyncio.sleep(30)
+            from core.stats import flush_all
+            from cogs._detection import _save_session, _prune_caches
+            _prune_caches()
+            _save_session()
+            flush_all()
+            log.debug("Background flush done")
+    bot._flush_task = asyncio.create_task(_periodic_flush())
 
     if not getattr(bot, "light_mode", False):
         monitor = bot.get_cog("Monitor")
