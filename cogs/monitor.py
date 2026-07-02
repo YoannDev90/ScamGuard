@@ -133,6 +133,12 @@ class Monitor(commands.Cog, name="Monitor"):
         if not triggered:
             return
 
+        # Cooldown check — skip repeat actions/alert, keep reaction
+        cd = gc.get("cooldown_seconds", 300)
+        now = message.created_at.timestamp()
+        last = self._cooldowns.get(uid, 0)
+        on_cooldown = (now - last) < cd
+
         # Reactions (before actions — message may be deleted)
         reactions_cfg = gc.get("reactions", {})
         try:
@@ -147,16 +153,13 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.HTTPException as exc:
             log.debug("Reaction failed msg=%d: %s", message.id, exc)
 
+        if on_cooldown:
+            log.debug("Cooldown active for user=%d (%ds remaining)", uid, int(cd - (now - last)))
+            return
+
         # Execute actions — one trigger, fast
         await execute_actions("scam", message, result)
 
-        # Cooldown
-        cd = gc.get("cooldown_seconds", 300)
-        now = message.created_at.timestamp()
-        last = self._cooldowns.get(uid, 0)
-        if now - last < cd:
-            log.debug("Cooldown active for user=%d (%ds remaining)", uid, int(cd - (now - last)))
-            return
         self._cooldowns[uid] = now
         self._clean_cooldowns()
 

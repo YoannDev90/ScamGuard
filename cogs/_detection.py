@@ -85,6 +85,10 @@ class Detector:
 
     # ── Banned image hashes (phash) ──────────────────────────────────
 
+    def invalidate_banned_cache(self) -> None:
+        """Clear banned images hash cache (call after adding new images)."""
+        self._banned_hashes_cache = None
+
     def _banned_hashes(self, gc: GuildConfig):
         attr = "_banned_hashes_cache"
         cached = getattr(self, attr, None)

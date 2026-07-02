@@ -456,7 +456,7 @@ class Config(commands.Cog, name="Config"):
 
             detector = self.bot.get_cog("Monitor")
             if detector:
-                detector.detector._banned_hashes_cache = None
+                detector.detector.invalidate_banned_cache()
 
             embed = discord.Embed(title="✅ Banned image added", colour=discord.Colour.green())
             embed.add_field(name="File", value=f"`{path.name}`", inline=True)

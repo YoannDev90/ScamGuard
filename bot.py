@@ -5,12 +5,11 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import json
 import re
 import sys
 import warnings
 from pathlib import Path
-
-import json5
 
 import colorama
 import discord
@@ -91,25 +90,24 @@ class ConfigManager:
         self.settings: dict = {}
         self._loaded = False
 
-    def _load_json5(self, path: Path) -> dict:
-        """Load a JSON5 file, returns empty dict if missing."""
+    def _load_json(self, path: Path) -> dict:
+        """Load a JSON file, returns empty dict if missing."""
         if path.exists():
             with open(path) as f:
-                return json5.load(f)
+                return json.load(f)
         return {}
 
     def _save_json(self, path: Path, data: dict) -> None:
-        """Write dict as JSON (preserves JSON5 compat for re-reading)."""
-        import json
+        """Write dict as JSON."""
         with open(path, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         log.info("Saved %s", path.name)
 
     def load(self) -> None:
-        patterns_path = self._dir / "patterns.json5"
-        settings_path = self._dir / "settings.json5"
+        patterns_path = self._dir / "patterns.json"
+        settings_path = self._dir / "settings.json"
 
-        data = self._load_json5(patterns_path)
+        data = self._load_json(patterns_path)
         self._patterns = data.get("patterns", [])
         self._compiled = []
         for p in self._patterns:
@@ -126,7 +124,7 @@ class ConfigManager:
             except re.error as exc:
                 log.error("Regex error for '%s': %s", p["name"], exc)
 
-        self.settings = self._load_json5(settings_path)
+        self.settings = self._load_json(settings_path)
 
         self._loaded = True
         log.info(
@@ -175,7 +173,7 @@ class ConfigManager:
         if key == "actions":
             return  # actions managed via dedicated commands
         self.settings[key] = value
-        self._save_json(self._dir / "settings.json5", self.settings)
+        self._save_json(self._dir / "settings.json", self.settings)
 
     def get_actions(self, trigger: str) -> list:
         """Return action list for a given trigger level."""
@@ -185,14 +183,14 @@ class ConfigManager:
         """Add an action to a trigger level and persist."""
         actions = self.settings.setdefault("actions", {})
         actions.setdefault(trigger, []).append(action)
-        self._save_json(self._dir / "settings.json5", self.settings)
+        self._save_json(self._dir / "settings.json", self.settings)
 
     def remove_action(self, trigger: str, index: int) -> bool:
         """Remove an action by index. Returns False if invalid."""
         actions = self.settings.get("actions", {}).get(trigger, [])
         if 0 <= index < len(actions):
             actions.pop(index)
-            self._save_json(self._dir / "settings.json5", self.settings)
+            self._save_json(self._dir / "settings.json", self.settings)
             return True
         return False
 
@@ -200,7 +198,7 @@ class ConfigManager:
         """Clear all actions for a trigger."""
         actions = self.settings.setdefault("actions", {})
         actions[trigger] = []
-        self._save_json(self._dir / "settings.json5", self.settings)
+        self._save_json(self._dir / "settings.json", self.settings)
 
     # ── Pattern management ───────────────────────────────────────────
 
@@ -220,7 +218,7 @@ class ConfigManager:
         }
         self._patterns.append(entry)
         self._recompile()
-        self._save_json(self._dir / "patterns.json5", {"patterns": self._patterns})
+        self._save_json(self._dir / "patterns.json", {"patterns": self._patterns})
         return True
 
     def remove_pattern(self, name: str) -> bool:
@@ -230,7 +228,7 @@ class ConfigManager:
                 self._patterns.pop(i)
                 self._recompile()
                 self._save_json(
-                    self._dir / "patterns.json5", {"patterns": self._patterns}
+                    self._dir / "patterns.json", {"patterns": self._patterns}
                 )
                 return True
         return False
@@ -242,7 +240,7 @@ class ConfigManager:
                 p["enabled"] = not p.get("enabled", True)
                 self._recompile()
                 self._save_json(
-                    self._dir / "patterns.json5", {"patterns": self._patterns}
+                    self._dir / "patterns.json", {"patterns": self._patterns}
                 )
                 return p["enabled"]
         return None
