@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
   <rect width="1920" height="1080" fill="#1a1a2e"/>
-  <g transform="translate(480, 540) scale(2.2)">
-    <rect x="-112" y="-112" width="224" height="224" rx="34"
-          fill="none" stroke="#e94560" stroke-width="10" transform="rotate(45)"/>
-    <rect x="-60" y="-130" width="14" height="176" rx="7" fill="#e94560"/>
-    <rect x="-28" y="-100" width="12" height="128" rx="6" fill="#e94560" opacity="0.7"/>
-    <rect x="4" y="-100" width="12" height="128" rx="6" fill="#e94560" opacity="0.7"/>
-    <rect x="36" y="-130" width="14" height="176" rx="7" fill="#e94560"/>
+  <g transform="translate(420, 540) scale(3.2)">
+    <rect x="-80" y="-80" width="160" height="160" rx="24"
+          fill="none" stroke="#ffffff" stroke-width="8" transform="rotate(45)"/>
+    <rect x="-42" y="-91" width="8" height="126" rx="4" fill="#ffffff"/>
+    <rect x="-17" y="-66" width="8" height="88" rx="4" fill="#ffffff" opacity="0.7"/>
+    <rect x="9" y="-66" width="8" height="88" rx="4" fill="#ffffff" opacity="0.7"/>
+    <rect x="34" y="-91" width="8" height="126" rx="4" fill="#ffffff"/>
   </g>
-  <text x="880" y="555" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif"
+  <text x="800" y="555" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif"
         font-size="100" font-weight="700" fill="#ffffff" letter-spacing="6">ScamGuard</text>
 </svg>
