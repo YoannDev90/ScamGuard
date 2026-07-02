@@ -251,6 +251,13 @@ async def on_ready() -> None:
     log.info("Bot connected as %s  (ID: %s)", bot.user, bot.user.id)
 
 
+@bot.event
+async def on_guild_remove(guild: discord.Guild) -> None:
+    from core.config import remove_guild_config
+    remove_guild_config(guild.id)
+    log.info("Left guild %s (%d) — config cache cleaned", guild.name, guild.id)
+
+
 def _apply_logging_level() -> None:
     """Set root logging level from settings, affecting all loggers."""
     level_name = config.get("logging_level", "INFO").upper()

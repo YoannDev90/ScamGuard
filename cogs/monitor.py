@@ -1,8 +1,9 @@
-"""Scam surveillance - listens to messages and delegates to detection + actions."""
+"""Message surveillance — delegates to detector + action engine."""
 
 from __future__ import annotations
 
 import logging
+import time
 
 import discord
 from discord.ext import commands
@@ -13,6 +14,8 @@ from cogs.actions import execute_actions
 
 log = logging.getLogger("cogs.monitor")
 
+_COOLDOWN_CLEANUP_INTERVAL = 600  # purge stale entries every 10 min
+
 
 class Monitor(commands.Cog, name="Monitor"):
     """Listens to all messages, delegates to Detector and action executors."""
@@ -21,15 +24,43 @@ class Monitor(commands.Cog, name="Monitor"):
         self.bot = bot
         self.detector = Detector(bot)
         self._cooldowns: dict[int, float] = {}
+        self._last_cooldown_cleanup = 0.0
+
+    async def cog_unload(self) -> None:
+        await self.detector.close()
+
+    # ── Helpers ──────────────────────────────────────────────────────
+
+    def _clean_cooldowns(self) -> None:
+        now = time.time()
+        if now - self._last_cooldown_cleanup < _COOLDOWN_CLEANUP_INTERVAL:
+            return
+        cutoff = now - 3600  # prune > 1h old
+        self._cooldowns = {k: v for k, v in self._cooldowns.items() if v >= cutoff}
+        self._last_cooldown_cleanup = now
+
+    def _legacy_embed_colour(self, score: int, gc) -> int:
+        ec = gc.get("embed_colors", {})
+        threshold = gc.get("embed_dark_red_threshold", 70)
+        if score >= threshold:
+            return discord.Colour.dark_red().value
+        return ec.get("scam", 0xE74C3C)
+
+    # ── Message handler ──────────────────────────────────────────────
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
+        try:
+            await self._on_message_inner(message)
+        except Exception:
+            log.exception("Unhandled error in on_message msg %d", message.id)
+
+    async def _on_message_inner(self, message: discord.Message) -> None:
         if message.author.bot or not message.guild:
             return
 
         gc = get_guild_config(message.guild.id)
 
-        # Ignored entities
         if message.author.id in gc.get_ignored("user_ids"):
             return
         if message.channel.id in gc.get_ignored("channel_ids"):
@@ -37,7 +68,6 @@ class Monitor(commands.Cog, name="Monitor"):
         if any(role.id in gc.get_ignored("role_ids") for role in message.author.roles):
             return
 
-        # Minimum message length
         min_len = gc.get("message_min_length", 15)
         urls = await self.detector._get_image_urls(message, gc)
         if not urls and len(message.content.strip()) < min_len:
@@ -47,14 +77,15 @@ class Monitor(commands.Cog, name="Monitor"):
             log.debug("Analyzing msg %d | guild=%d | author=%s | has_image=%s",
                        message.id, message.guild.id, message.author, bool(urls))
 
-        # ── Analyze ──────────────────────────────────────────────────
         result = await self.detector.analyze_message(message, gc)
 
-        # ── Banned image check ───────────────────────────────────────
+        # Banned image check
         banned_match = None
         if urls:
+            max_size = gc.get("image_max_size", 5242880)
+            dl_timeout = gc.get("image_download_timeout", 30)
             for url in urls:
-                data = await self._download(url)
+                data = await self.detector._download(url, max_size, dl_timeout)
                 if data is None:
                     continue
                 banned_match = await self.detector.check_banned_image(data, gc)
@@ -70,7 +101,7 @@ class Monitor(commands.Cog, name="Monitor"):
             )
             log.warning("Banned image msg %d | guild=%d | matched=%s", message.id, message.guild.id, banned_match["matched"])
 
-        # ── Execute actions ──────────────────────────────────────────
+        # Execute actions
         if result["is_scam"]:
             await execute_actions("scam", message, result)
         elif result["score"] >= gc.get("score_warn", 30):
@@ -78,7 +109,7 @@ class Monitor(commands.Cog, name="Monitor"):
         if banned_match:
             await execute_actions("banned_image", message, result)
 
-        # ── Reactions ────────────────────────────────────────────────
+        # Reactions
         has_image_flag = bool(banned_match)
         reactions_cfg = gc.get("reactions", {})
         try:
@@ -91,7 +122,7 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.HTTPException:
             pass
 
-        # ── Legacy alerts (keep for backward compat) ─────────────────
+        # Legacy alerts
         if has_image_flag:
             await self._legacy_report_banned(message, result, gc)
 
@@ -101,15 +132,15 @@ class Monitor(commands.Cog, name="Monitor"):
             if now - self._cooldowns.get(message.author.id, 0) < cd:
                 return
             self._cooldowns[message.author.id] = now
+            self._clean_cooldowns()
             log.warning("Scam msg %d | guild=%d | score=%d", message.id, message.guild.id, result["score"])
             await self._legacy_notify(message, result, gc)
 
-    # ── Legacy helpers (backward compat) ─────────────────────────────
+    # ── Legacy helpers ───────────────────────────────────────────────
 
     async def _legacy_notify(self, message: discord.Message, result: dict, gc) -> None:
-        """Fallback notification if no notify_channel action configured."""
         if gc.get_actions("scam") and any(a["type"] in ("notify_channel", "notify_role", "notify_user") for a in gc.get_actions("scam")):
-            return  # Modern action handles it
+            return
         ch_id = gc.get("alert_channel_id")
         target = self.bot.get_channel(ch_id) if ch_id else None
         if not target:
@@ -121,9 +152,10 @@ class Monitor(commands.Cog, name="Monitor"):
             role = message.guild.get_role(ping_role)
             if role:
                 ping = role.mention
+        score = result.get("score", 0)
         embed = discord.Embed(
-            title=f"Scam alert (score: {result['score']})",
-            colour=discord.Colour.dark_red() if result["score"] >= 70 else discord.Colour.red(),
+            title=f"Scam alert (score: {score})",
+            colour=self._legacy_embed_colour(score, gc),
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name="Author", value=message.author.mention, inline=True)
@@ -146,15 +178,15 @@ class Monitor(commands.Cog, name="Monitor"):
             except discord.Forbidden:
                 pass
         if gc.get("dm_author_on_alert", False):
+            warn_msg = gc.get("warn_message_default", "Your message has been flagged.")
             try:
                 await message.author.send(
-                    f"Your message in {message.channel.mention} was flagged (score: {result['score']})."
+                    f"{warn_msg}\nServer: {message.guild.name}\nChannel: {message.channel.mention}"
                 )
             except discord.Forbidden:
                 pass
 
     async def _legacy_report_banned(self, message: discord.Message, result: dict, gc) -> None:
-        """Fallback banned image notification."""
         if gc.get_actions("banned_image") and any(a["type"] in ("notify_channel", "log") for a in gc.get_actions("banned_image")):
             return
         ch_id = gc.get("alert_channel_id")
@@ -164,7 +196,12 @@ class Monitor(commands.Cog, name="Monitor"):
             target = next((c for c in message.guild.text_channels if c.name in channels), message.channel)
         banned = result.get("image_flag", {}).get("banned")
         reasons = [f"Banned image: {banned['matched']} ({banned['similarity']}%)"] if banned else []
-        embed = discord.Embed(title="🔞 Banned image detected", colour=discord.Colour.purple(), timestamp=discord.utils.utcnow())
+        ec = gc.get("embed_colors", {})
+        embed = discord.Embed(
+            title="Banned image detected",
+            colour=discord.Colour(ec.get("banned_image", 0x9B59B6)),
+            timestamp=discord.utils.utcnow(),
+        )
         embed.add_field(name="Author", value=message.author.mention, inline=True)
         embed.add_field(name="Channel", value=message.channel.mention, inline=True)
         if reasons:
@@ -180,18 +217,6 @@ class Monitor(commands.Cog, name="Monitor"):
                 await message.delete()
             except discord.Forbidden:
                 pass
-
-    async def _download(self, url: str) -> bytes | None:
-        import aiohttp
-        try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status != 200:
-                        return None
-                    data = await resp.read()
-                    return data if len(data) <= 5 * 1024 * 1024 else None
-        except Exception:
-            return None
 
     # ── Community reaction system ────────────────────────────────────
 

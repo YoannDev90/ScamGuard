@@ -214,14 +214,17 @@ class GuildConfig:
                 self._invalidate_cache()
                 self._save()
                 return p["enabled"]
-        # Check in global
+        # Copy global pattern to guild before toggle (no cross-guild mutation)
         for p in global_cfg.raw_patterns:
             if p["name"] == name:
-                p["enabled"] = not p.get("enabled", True)
-                v = p["enabled"]
-                global_cfg._recompile()
-                global_cfg._save_json(global_cfg._dir / "patterns.json5", {"patterns": global_cfg._patterns})
-                return v
+                VersionManager(self).snapshot()
+                entry = dict(p)
+                entry["enabled"] = not entry.get("enabled", True)
+                self.data.setdefault("patterns", []).append(entry)
+                self.data["_version"] += 1
+                self._invalidate_cache()
+                self._save()
+                return entry["enabled"]
         return None
 
     # ── Ignored entities ─────────────────────────────────────────────
@@ -256,6 +259,23 @@ class GuildConfig:
 
     # ── Utility ──────────────────────────────────────────────────────
 
+    def reset(self) -> None:
+        """Reset guild config to defaults, preserving guild_id."""
+        VersionManager(self).snapshot()
+        self.data = {
+            "guild_id": self.guild_id,
+            "_version": self.data.get("_version", 0) + 1,
+            "settings": {},
+            "patterns": [],
+            "actions": {"scam": [], "suspicious": [], "banned_image": []},
+            "ignored": {"user_ids": [], "role_ids": [], "channel_ids": []},
+        }
+        self._invalidate_cache()
+        self._save()
+
+    def __repr__(self) -> str:
+        return f"<GuildConfig id={self.guild_id} v={self.data.get('_version', 0)} pat={len(self.get_patterns())}>"
+
     def to_dict(self) -> dict:
         return {
             "settings": self.data.get("settings", {}),
@@ -276,6 +296,11 @@ def get_guild_config(guild_id: int) -> GuildConfig:
     if guild_id not in _guild_configs:
         _guild_configs[guild_id] = GuildConfig(guild_id)
     return _guild_configs[guild_id]
+
+
+def remove_guild_config(guild_id: int) -> None:
+    """Remove a guild from the config cache (e.g. on guild leave)."""
+    _guild_configs.pop(guild_id, None)
 
 
 def clear_guild_config_cache() -> None:

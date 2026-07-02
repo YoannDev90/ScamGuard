@@ -20,6 +20,18 @@ class Detector:
     def __init__(self, bot) -> None:
         self.bot = bot
         self._ocr = None
+        self._session: aiohttp.ClientSession | None = None
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self) -> None:
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
 
     # ── OCR ──────────────────────────────────────────────────────────
 
@@ -35,9 +47,9 @@ class Detector:
             log.info("easyocr ready")
         return self._ocr
 
-    async def ocr_image(self, url: str, max_ocr_len: int = 2000, max_size: int = 5242880) -> Optional[str]:
+    async def ocr_image(self, url: str, max_ocr_len: int = 2000, max_size: int = 5242880, timeout: int = 30) -> Optional[str]:
         """Download image and extract text via OCR."""
-        data = await self._download(url, max_size)
+        data = await self._download(url, max_size, timeout)
         if data is None:
             return None
         log.debug("Running OCR on %s (%d bytes) ...", url, len(data))
@@ -122,9 +134,11 @@ class Detector:
         all_text = (message.content.strip() + "\n") if message.content.strip() else ""
         urls = await self._get_image_urls(message, gc)
         max_size = gc.get("image_max_size", 5242880)
+        dl_timeout = gc.get("image_download_timeout", 30)
+        ocr_max = gc.get("max_ocr_length", 2000)
 
         for url in urls:
-            text = await self.ocr_image(url, max_size=max_size)
+            text = await self.ocr_image(url, max_ocr_len=ocr_max, max_size=max_size, timeout=dl_timeout)
             if text:
                 result["ocr_text"] += text + "\n"
                 all_text += text + "\n"
@@ -168,16 +182,15 @@ class Detector:
 
     # ── Image helpers ────────────────────────────────────────────────
 
-    async def _download(self, url: str, max_size: int = 5242880) -> Optional[bytes]:
+    async def _download(self, url: str, max_size: int = 5242880, timeout: int = 30) -> Optional[bytes]:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status != 200:
-                        return None
-                    data = await resp.read()
-                    if len(data) > max_size:
-                        return None
-                    return data
+            async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.read()
+                if len(data) > max_size:
+                    return None
+                return data
         except Exception:
             return None
 
