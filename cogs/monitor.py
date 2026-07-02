@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -38,25 +39,35 @@ class Monitor(commands.Cog, name="Monitor"):
         self._last_cooldown_cleanup = now
 
     async def _batch_cleanup(self, message: discord.Message) -> None:
-        """Delete recent messages from the same author in the same channel."""
-        try:
-            to_delete = []
-            async for msg in message.channel.history(limit=50, before=message):
-                if msg.author.id == message.author.id:
-                    to_delete.append(msg)
-            while to_delete:
-                batch = to_delete[:100]
-                to_delete = to_delete[100:]
-                if len(batch) == 1:
-                    await batch[0].delete()
-                else:
-                    await message.channel.delete_messages(batch)
-            log.info("Batch cleanup: deleted messages from user %d in #%s",
-                     message.author.id, message.channel.name)
-        except discord.Forbidden:
-            log.debug("Batch cleanup: missing manage_messages in #%s", message.channel.name)
-        except discord.HTTPException as e:
-            log.debug("Batch cleanup: HTTP error %s", e)
+        """Delete recent messages from the same author across all visible channels."""
+        uid = message.author.id
+        total = 0
+        ch_count = 0
+        for channel in message.guild.text_channels:
+            if not channel.permissions_for(message.guild.me).manage_messages:
+                continue
+            ch_count += 1
+            try:
+                found = []
+                async for msg in channel.history(limit=30):
+                    if msg.author.id == uid:
+                        found.append(msg)
+                if not found:
+                    continue
+                count = len(found)
+                for i in range(0, count, 100):
+                    batch = found[i:i + 100]
+                    if len(batch) == 1:
+                        await batch[0].delete()
+                    else:
+                        await channel.delete_messages(batch)
+                    await asyncio.sleep(0.5)
+                total += count
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+            await asyncio.sleep(0.3)
+        if total:
+            log.info("Batch cleanup: deleted %d msgs from user %d in %d channels", total, uid, ch_count)
 
     # ── Alert embed ──────────────────────────────────────────────────
 
