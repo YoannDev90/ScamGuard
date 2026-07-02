@@ -112,8 +112,12 @@ def _save_session() -> None:
 
 def _prune_caches() -> None:
     now = time.time()
-    # Domain age: clear expired
-    _domain_age_cache.clear()
+    # Domain age: prune expired
+    stale_domains = [d for d, (_, ts) in _domain_age_cache.items() if now - ts > _DOMAIN_CACHE_TTL]
+    for d in stale_domains:
+        del _domain_age_cache[d]
+    if len(_domain_age_cache) > _DOMAIN_CACHE_MAX:
+        _domain_age_cache.clear()
     # Resolve: cap size
     if len(_resolve_cache) > _RESOLVE_CACHE_MAX:
         _resolve_cache.clear()
