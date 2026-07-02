@@ -1,4 +1,4 @@
-"""Core commands - ping and test-detect only."""
+"""Core commands — ping and test-detect."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class Core(commands.Cog, name="Core"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="ping", description="Afficher la latence du bot")
+    @app_commands.command(name="ping", description="Show bot latency")
     async def ping(self, interaction: discord.Interaction) -> None:
         start = time.perf_counter()
         await interaction.response.send_message("Ping …", ephemeral=True)
@@ -31,8 +31,8 @@ class Core(commands.Cog, name="Core"):
         embed.add_field(name="Response time", value=f"**{response_ms}** ms")
         await interaction.edit_original_response(content=None, embed=embed)
 
-    @app_commands.command(name="test-detect", description="Analyser un message contre les patterns")
-    @app_commands.describe(message_id="ID du message", channel="Salon (défaut: actuel)")
+    @app_commands.command(name="test-detect", description="Analyze a message against patterns")
+    @app_commands.describe(message_id="Message ID", channel="Channel (default: current)")
     async def test_detect(
         self,
         interaction: discord.Interaction,
@@ -44,18 +44,18 @@ class Core(commands.Cog, name="Core"):
         try:
             msg = await channel.fetch_message(int(message_id))
         except ValueError:
-            await interaction.followup.send("ID invalide.", ephemeral=True)
+            await interaction.followup.send("Invalid ID.", ephemeral=True)
             return
         except discord.NotFound:
-            await interaction.followup.send(f"Message introuvable dans {channel.mention}.", ephemeral=True)
+            await interaction.followup.send(f"Message not found in {channel.mention}.", ephemeral=True)
             return
         except discord.Forbidden:
-            await interaction.followup.send("Accès refusé.", ephemeral=True)
+            await interaction.followup.send("Access denied.", ephemeral=True)
             return
 
         monitor = self.bot.get_cog("Monitor")
         if not monitor:
-            await interaction.followup.send("Monitor non chargé.", ephemeral=True)
+            await interaction.followup.send("Monitor not loaded.", ephemeral=True)
             return
 
         gc = get_guild_config(interaction.guild_id)
@@ -69,18 +69,18 @@ class Core(commands.Cog, name="Core"):
             status = f"**SCAM** (score: {score})"
         elif score >= gc.get("score_warn", 30):
             colour = discord.Colour(ec.get("suspicious", 0xE67E22))
-            status = f"**Suspect** (score: {score})"
+            status = f"**Suspicious** (score: {score})"
         else:
             colour = discord.Colour(ec.get("ok", 0x2ECC71))
             status = f"**OK** (score: {score})"
 
-        embed = discord.Embed(title="Résultat d'analyse", colour=colour, timestamp=discord.utils.utcnow())
-        embed.add_field(name="Statut", value=status, inline=False)
-        embed.add_field(name="Score", value=f"**{score}** / seuil {gc.get('score_alert', 50)}", inline=True)
+        embed = discord.Embed(title="Analysis result", colour=colour, timestamp=discord.utils.utcnow())
+        embed.add_field(name="Status", value=status, inline=False)
+        embed.add_field(name="Score", value=f"**{score}** / threshold {gc.get('score_alert', 50)}", inline=True)
         factors = result.get("factors", [])
         if factors:
-            embed.add_field(name="Facteurs", value="\n".join(f"- `{f}`" for f in factors), inline=False)
-        embed.add_field(name="Message", value=f"[Jump]({msg.jump_url}) | Auteur: {msg.author.mention}", inline=False)
+            embed.add_field(name="Factors", value="\n".join(f"- `{f}`" for f in factors), inline=False)
+        embed.add_field(name="Message", value=f"[Jump]({msg.jump_url}) | Author: {msg.author.mention}", inline=False)
         if result.get("ocr_text"):
             embed.add_field(name="OCR", value=f"```{result['ocr_text'][:500]}```", inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
