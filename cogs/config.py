@@ -147,10 +147,23 @@ class Config(commands.Cog, name="Config"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    actions = app_commands.Group(name="actions", description="Manage actions")
-    keywords = app_commands.Group(name="keywords", description="Manage keywords")
-    whitelist = app_commands.Group(name="whitelist", description="Manage whitelists")
-    versions = app_commands.Group(name="versions", description="Manage versions")
+    # ── Sub-groups ───────────────────────────────────────────────────
+
+    @config.group(name="actions", description="Manage actions")
+    async def actions(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("Use `/config actions list|add|remove|clear`.", ephemeral=True)
+
+    @config.group(name="keywords", description="Manage keywords")
+    async def keywords(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("Use `/config keywords list|add|remove|toggle`.", ephemeral=True)
+
+    @config.group(name="whitelist", description="Manage whitelists")
+    async def whitelist(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("Use `/config whitelist domain-add|domain-remove|domains|user|users`.", ephemeral=True)
+
+    @config.group(name="versions", description="Manage versions")
+    async def versions(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("Use `/config versions list|revert`.", ephemeral=True)
 
     # ── Show ─────────────────────────────────────────────────────────
 
