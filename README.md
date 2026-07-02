@@ -42,63 +42,51 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 
 ### Configuration (`/config`)
 
-| Sous-commande | Description |
-|---------------|-------------|
-| `show` | Affiche la configuration |
+| Commande | Description |
+|----------|-------------|
+| `show` | Affiche toute la configuration |
 | `get <key>` | Lit une valeur |
-| `set <key> <value>` | Modifie un paramètre (validation type incluse) |
+| `set <key> <value>` | Modifie un paramètre (validation type) |
 | `reload` | Recharge depuis les fichiers |
 | `reset` | Réinitialise la config du serveur |
 | `channel [channel]` | Définit le salon d'alerte |
+| `banned-add [image] [url] [name]` | Ajoute une image interdite (phash) |
+| `ignore add/remove user/role/channel <e>` | Ignorer / ne plus ignorer |
 
-**Actions :**
-
-| Sous-commande | Description |
-|---------------|-------------|
-| `actions-list [trigger]` | Liste les actions |
-| `actions-add <trigger> <action>` | Ajoute une action |
-| `actions-remove <trigger> <index>` | Supprime |
-| `actions-clear <trigger>` | Vide |
-
-**Keywords :**
-
-| Sous-commande | Description |
-|---------------|-------------|
-| `keywords-list` | Liste (paginer si > 20) |
-| `keywords-add <word> <weight> [desc]` | Ajoute |
-| `keywords-remove <word>` | Supprime |
-| `keywords-toggle <word>` | Active/désactive |
-
-**Whitelist :**
-
-| Sous-commande | Description |
-|---------------|-------------|
-| `whitelist-domain add <domain>` | Ajoute un domaine |
-| `whitelist-domain remove <domain>` | Supprime |
-| `whitelist-domains` | Liste |
-| `whitelist-user add <user>` | Ajoute un user (/test-detect) |
-| `whitelist-user remove <user>` | Supprime |
-| `whitelist-users` | Liste |
-
-**Ignorer :**
-
-| Sous-commande | Description |
-|---------------|-------------|
-| `ignore add user/role/channel <entity>` | Ignore |
-| `ignore remove user/role/channel <entity>` | Ne plus ignorer |
-
-**Versions :**
-
-| Sous-commande | Description |
-|---------------|-------------|
-| `versions-list` | Historique des versions |
-| `versions-revert <version>` | Revenir à une version |
-
-**Images interdites :**
+**`/config actions` :**
 
 | Commande | Description |
 |----------|-------------|
-| `/config banned-add [image] [url] [name]` | Ajoute une image (phash) |
+| `list [trigger]` | Liste les actions |
+| `add <trigger> <action>` | Ajoute une action |
+| `remove <trigger> <index>` | Supprime |
+| `clear <trigger>` | Vide |
+
+**`/config keywords` :**
+
+| Commande | Description |
+|----------|-------------|
+| `list` | Liste paginée |
+| `add <word> <weight> [desc]` | Ajoute |
+| `remove <word>` | Supprime |
+| `toggle <word>` | Active/désactive |
+
+**`/config whitelist` :**
+
+| Commande | Description |
+|----------|-------------|
+| `domain-add <domain>` | Ajoute un domaine |
+| `domain-remove <domain>` | Supprime |
+| `domains` | Liste |
+| `user add/remove <user>` | Ajoute/supprime user (/test-detect) |
+| `users` | Liste |
+
+**`/config versions` :**
+
+| Commande | Description |
+|----------|-------------|
+| `list` | Historique |
+| `revert <version>` | Revenir à une version |
 
 ### Types d'actions
 
