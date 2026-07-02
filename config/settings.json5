@@ -1,0 +1,73 @@
+{
+  // ------------------------------------------------------------------
+  // Scoring thresholds
+  // ------------------------------------------------------------------
+  score_alert: 50, // Minimum total score to trigger a scam alert
+  score_warn: 30, // Minimum total score to mark a message as suspicious
+  no_text_bonus: 10, // Extra points when only an image scored (no author text)
+
+  // ------------------------------------------------------------------
+  // Message filtering
+  // ------------------------------------------------------------------
+  message_min_length: 15, // Minimum characters in author text before analysis starts
+  ignored_user_ids: [], // List of Discord user IDs to completely ignore
+  ignored_role_ids: [], // List of Discord role IDs whose messages are ignored
+  ignored_channel_ids: [], // List of channel IDs where analysis is skipped
+
+  // ------------------------------------------------------------------
+  // Image / OCR analysis
+  // ------------------------------------------------------------------
+  image_max_size: 5242880, // Max image download size (bytes, 5 MB)
+  image_download_timeout: 30, // Seconds to wait for image download
+  supported_extensions: [
+    // Image formats accepted for OCR
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+  ],
+  ocr_timeout: 30, // Seconds to wait for OCR processing
+  max_ocr_length: 2000, // Max characters of OCR text stored / displayed
+  language: ["fr", "en"], // OCR languages (easyocr codes)
+  image_url_regex: "(https?://[^\\s]+\\.(?:png|jpg|jpeg|gif|webp))", // Regex to find image URLs in message text
+
+  // ------------------------------------------------------------------
+  // Image similarity (banned image matching via phash)
+  // ------------------------------------------------------------------
+  banned_images_dir: "banned_images", // Directory with reference images to flag
+  banned_images_threshold: 20, // Max phash distance (0-64) to consider a match
+  banned_images_score: 50, // Score contribution when a banned image matches
+
+  // ------------------------------------------------------------------
+  // Notifications
+  // ------------------------------------------------------------------
+  log_channel_names: [
+    // Fallback channel names searched in order
+    "logs",
+    "admin",
+    "alerts",
+    "moderation",
+    "anti-scam",
+  ],
+  alert_channel_id: null, // Direct channel ID for alerts (priority over names)
+  ping_role_id: null, // Role ID to @mention on scam detection
+  dm_author_on_alert: false, // Send a DM to the message author when scam detected
+  dm_message_template: "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.", // Template for DM to author
+  auto_delete: false, // Automatically delete messages flagged as scam
+  cooldown_seconds: 300, // Min seconds between alerts for the same user (5 min)
+
+  // ------------------------------------------------------------------
+  // Community features
+  // ------------------------------------------------------------------
+  community_confirm_count: 3, // Number of alert reactions before auto-notify
+  report_emoji: "\uD83D\uDC6E", // Emoji users click to report a message
+  enable_report: true, // Enable the report-emoji feature
+
+  // ------------------------------------------------------------------
+  // Debug / misc
+  // ------------------------------------------------------------------
+  debug_mode: false, // Enable extra debug-level logging for this cog
+  logging_level: "INFO", // Logging level for this cog (DEBUG, INFO, WARNING, ERROR)
+}

@@ -1,0 +1,154 @@
+{
+  // Scam detection patterns -- each entry is a regex matched against message
+  // text + OCR output.  Score = sum of weights from all matching patterns.
+  //   >= score_alert -> scam alert
+  //   >= score_warn  -> suspicious
+  //   <  score_warn  -> ignored
+  //
+  // Weight guide:
+  //   50    = near-certain (wallet verification, seed phrase)
+  //   35-30 = strong (doubler, casino, giveaway, celebrity)
+  //   25-20 = moderate (airdrop, fake project, suspicious URL)
+  //   10    = weak (weird TLD, withdrawal pressure, presale)
+  //   5     = noise (urgency, promo -- only meaningful in combination)
+  patterns: [
+    // ------------------------------------------------------------------
+    // HIGH (50) -- near-certain indicators
+    // ------------------------------------------------------------------
+    {
+      name: "wallet_verify",
+      pattern: "(metamask|wallet|trust\\s*wallet|phantom)\\s*(synchronis|v[eé]rifi|valid|connect|sync|verify|connect)",
+      weight: 50,
+      enabled: true,
+      desc: "Wallet verification request — almost always a scam",
+    },
+    {
+      name: "seed_phrase",
+      pattern: "(seed\\s*phrase|private\\s*key|cl[eé]\\s*priv[eé]e|r[eé]cup[eé]r(?:e|er)\\s*(?:mon|ton|son)\\s*(?:compte|wallet|portefeuille))",
+      weight: 50,
+      enabled: true,
+      desc: "Seed phrase / private key theft",
+    },
+
+    // ------------------------------------------------------------------
+    // MEDIUM-HIGH (35-30) -- strong indicators
+    // ------------------------------------------------------------------
+    {
+      name: "doubler_crypto",
+      pattern: "(doubler|double|multiplier|rendre|multiply)\\s*(?:vos?|tes?|son|ses|leur|your)\\s*(crypto(?:currency|monnaie)?|eth|btc|bitcoin|ethereum|usdt|argent|investissement|investment|money)",
+      weight: 35,
+      enabled: true,
+      desc: "Promise to double your crypto",
+    },
+    {
+      name: "crypto_casino",
+      pattern: "crypto(?:currency|monnaie)?\\s*(casino|gambling|jeu|bet|paris|betting)",
+      weight: 35,
+      enabled: true,
+      desc: "Crypto casino / gambling",
+    },
+    {
+      name: "giveaway_crypto",
+      pattern: "(giveaway|gagne\\s*(?:des|du|de\\s*la)?|gratuit|free|win)\\s+(eth|btc|bitcoin|ethereum|crypto(?:currency|monnaie)?|usdt|sol|bnb|nft)",
+      weight: 30,
+      enabled: true,
+      desc: "Fake crypto giveaway",
+    },
+    {
+      name: "celebrity_scam",
+      pattern: "(mrbeast|elon\\s*musk|vitalik|crypto\\s*(?:billionaire|millionaire)|millionaire|billionaire)\\s*(?::?\\s*announce|launch|giveaway|casino|project|token|coin|invest)",
+      weight: 30,
+      enabled: true,
+      desc: "Celebrity / influencer impersonation",
+    },
+
+    // ------------------------------------------------------------------
+    // MEDIUM (25-20) -- moderate indicators
+    // ------------------------------------------------------------------
+    {
+      name: "airdrop_claim",
+      pattern: "(airdrop|claim|mint|claiming)\\s+(gratuit|free|token|coin|nft)",
+      weight: 25,
+      enabled: true,
+      desc: "Fake airdrop / claim",
+    },
+    {
+      name: "fake_project",
+      pattern: "\\b(vyro|pepe|shiba|doge|safemoon|pump)\\s*(project|token|coin|launch|airdrop|presale)",
+      weight: 25,
+      enabled: true,
+      desc: "Known scam project name",
+    },
+    {
+      name: "crypto_launch",
+      pattern: "\\b(launch|annonce|present|presente|introducing|announcing)\\s+(?:mon|my|son|a|her|his|the|their)?\\s*(crypto(?:currency|monnaie)?|nft|token|coin|project|casino|platform)",
+      weight: 20,
+      enabled: true,
+      desc: "Suspicious crypto project launch",
+    },
+    {
+      name: "fake_url_crypto",
+      pattern: "https?://[^\\s]*(?:free|giveaway|claim|airdrop|bonus|promo)[^\\s]*",
+      weight: 20,
+      enabled: true,
+      desc: "Fraudulent URL (giveaway, bonus…)",
+    },
+    {
+      name: "fake_invest",
+      pattern: "(investir|invest|placement|rendement|retour)\\s+(?:dans|en|sur|in|with)\\s+(crypto(?:currency|monnaie)?|nft|token|projet|project)",
+      weight: 20,
+      enabled: true,
+      desc: "Fake investment opportunity",
+    },
+
+    // ------------------------------------------------------------------
+    // LOW (10) -- weak indicators
+    // ------------------------------------------------------------------
+    {
+      name: "weird_tld",
+      pattern: "https?://[^\\s]*\\.(?:xyz|top|bid|loan|click|gq|cf|ml|mom|win|rest|bar)\\b",
+      weight: 10,
+      enabled: true,
+      desc: "Suspicious domain TLD (.xyz, .click, .gq…)",
+    },
+    {
+      name: "withdraw_pressure",
+      pattern: "(retir(?:e|er)\\s+(?:tes?|vos?|ton)\\s*(?:gain|r[eé]compense|profit|fonds)|withdraw\\s+(?:your|the)\\s*(?:reward|profit|fund|money|earning))",
+      weight: 10,
+      enabled: true,
+      desc: "Pressure to withdraw winnings",
+    },
+    {
+      name: "presale",
+      pattern: "\\b(pre.?sale|presale|prevente|early\\s+access|whitelist|allowlist)\\b",
+      weight: 10,
+      enabled: true,
+      desc: "Presale / whitelist",
+    },
+
+    // ------------------------------------------------------------------
+    // NOISE (5) -- only meaningful in combination with other patterns
+    // ------------------------------------------------------------------
+    {
+      name: "urgency",
+      pattern: "\\b(urgent|imm[eé]diat|derni[eè]re\\s+chance|ne\\s+rate\\s+pas|action\\s+requise|limited\\s+time|act\\s+now|don't\\s+miss)\\b",
+      weight: 5,
+      enabled: true,
+      desc: "Urgency / time pressure (combinatorial only)",
+    },
+    {
+      name: "promo",
+      pattern: "\\b(promo|promotion|offre\\s+limit[eé]e?)\\b",
+      weight: 5,
+      enabled: true,
+      desc: "Promotion (combinatorial only)",
+    },
+    {
+      name: "follow_me",
+      pattern: "\\bfollow\\s+me\\b.*\\b(cookie|free|gift|giveaway|win)\\b",
+      weight: 5,
+      enabled: true,
+      desc: "Follow-for-giveaway (combinatorial only)",
+    },
+  ],
+}
