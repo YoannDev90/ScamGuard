@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 
@@ -49,7 +48,7 @@ class Monitor(commands.Cog, name="Monitor"):
         if not target:
             return
 
-        trigger = "banned_image" if result.get("image_flag") else "scam"
+        trigger = "banned_image" if result.get("image_flag") else ("scam" if result.get("is_scam") else "suspicious")
         embed = _build_alert_embed(message, result, gc, trigger=trigger)
 
         ping = ""
@@ -75,7 +74,9 @@ class Monitor(commands.Cog, name="Monitor"):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
-        if before.content == after.content or after.author.bot or not after.guild:
+        if after.author.bot or not after.guild:
+            return
+        if before.content == after.content and [a.url for a in before.attachments] == [a.url for a in after.attachments]:
             return
         try:
             await self._on_message_inner(after)
@@ -103,48 +104,52 @@ class Monitor(commands.Cog, name="Monitor"):
             return
 
         result = await self.detector.analyze_message(message, gc)
-        triggered = result["is_scam"] or bool(result.get("image_flag"))
+        is_scam = result["is_scam"] or bool(result.get("image_flag"))
+        is_sus = not is_scam and result["score"] >= gc.get("score_warn", 30)
 
         # Record stats
         sm = get_stats(gid)
         sm.increment_scanned()
-        if triggered:
+        if is_scam:
             if result.get("image_flag"):
                 sm.increment_banned_image()
-            elif result["is_scam"]:
+            else:
                 sm.increment_scam()
-        elif result["score"] >= gc.get("score_warn", 30):
+        elif is_sus:
             sm.increment_suspicious()
-        sm.flush()
 
-        if not triggered:
+        if not is_scam and not is_sus:
+            sm.flush()
             return
 
-        # Cooldown check first
+        # Cooldown check
         cd = gc.get("cooldown_seconds", 300)
         now = message.created_at.timestamp()
         last = self._cooldowns.get(uid, 0)
         on_cooldown = (now - last) < cd
 
-        # Reactions always fire (visual feedback before message delete)
+        # Reaction (visual feedback)
         reactions_cfg = gc.get("reactions", {})
         try:
-            emoji = reactions_cfg.get("banned_image" if result.get("image_flag") else "scam", "\U0001f6a8")
+            e_key = "banned_image" if result.get("image_flag") else ("scam" if is_scam else "suspicious")
+            emoji = reactions_cfg.get(e_key, "\U0001f6a8")
             await message.add_reaction(emoji)
         except discord.HTTPException:
             pass
 
         if on_cooldown:
+            sm.flush()
             log.debug("Cooldown active user=%d msg=%d", uid, message.id)
             return
 
-        # Execute actions + alert
-        await execute_actions("scam", message, result)
+        # Execute actions (confidence-based, no separate banned_image trigger)
+        trigger = "scam" if is_scam else "suspicious"
+        await execute_actions(trigger, message, result)
         sm.increment_actions()
         sm.flush()
         self._cooldowns[uid] = now
         self._clean_cooldowns()
-        log.warning("DETECTED guild=%d msg=%d author=%d score=%d", gid, message.id, uid, result["score"])
+        log.warning("DETECTED guild=%d msg=%d author=%d score=%d trigger=%s", gid, message.id, uid, result["score"], trigger)
         await self._send_alert(message, result, gc)
 
     # ── Community reaction system ────────────────────────────────────

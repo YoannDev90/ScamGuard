@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 import discord
-from core.config import GuildConfig, get_guild_config
+from core.config import get_guild_config
 
 log = logging.getLogger("cogs.actions")
 

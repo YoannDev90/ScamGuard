@@ -26,13 +26,21 @@ _crosspost: dict[str, list[tuple[int, float]]] = {}
 _seen_users: set[int] = set()
 # URL extraction regex
 _URL_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
+_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 # Domain age cache: domain -> (age_days, timestamp)
 _domain_age_cache: dict[str, tuple[int | None, float]] = {}
 _DOMAIN_CACHE_TTL = 3600
+_DOMAIN_CACHE_MAX = 500
 # Short URL resolution cache: short_url -> final_url
 _resolve_cache: dict[str, str | None] = {}
 _RESOLVE_TIMEOUT = 5
 _RESOLVE_MAX_REDIRECTS = 5
+_RESOLVE_CACHE_MAX = 1000
+# Session persistence
+_SESSION_DIR = Path("data/session")
+_SEEN_USERS_MAX = 10000
+_CROSSPOST_MAX = 1000
+_MEMO_OCR_MAX = 500
 
 
 def _ocr_cache_key(data: bytes) -> str:
@@ -53,8 +61,70 @@ def _ocr_cache_get(key: str) -> Optional[str]:
 
 def _ocr_cache_set(key: str, text: str) -> None:
     _MEMO_OCR[key] = text
+    if len(_MEMO_OCR) > _MEMO_OCR_MAX:
+        _MEMO_OCR.clear()
     _OCR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     (_OCR_CACHE_DIR / f"{key}.txt").write_text(text, encoding="utf-8")
+
+
+# ── Session persistence ────────────────────────────────────────────────
+
+_SESSION_FILE = _SESSION_DIR / "session.json"
+
+
+def _load_session() -> None:
+    if not _SESSION_FILE.exists():
+        return
+    try:
+        import json
+        data = json.loads(_SESSION_FILE.read_text())
+        _seen_users.update(data.get("seen_users", []))
+        seen = data.get("crosspost", {})
+        now = time.time()
+        window = 300
+        for h, entries in seen.items():
+            fresh = [(cid, ts) for cid, ts in entries if now - ts < window]
+            if fresh:
+                _crosspost[h] = fresh
+    except Exception:
+        _SESSION_FILE.unlink(missing_ok=True)
+
+
+def _save_session() -> None:
+    import json
+    _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    pruned_crosspost = {}
+    for h, entries in _crosspost.items():
+        if len(pruned_crosspost) >= _CROSSPOST_MAX:
+            break
+        pruned_crosspost[h] = entries
+    if len(_seen_users) > _SEEN_USERS_MAX:
+        _seen_users.clear()
+    data = {
+        "seen_users": list(_seen_users),
+        "crosspost": pruned_crosspost,
+    }
+    _SESSION_FILE.write_text(json.dumps(data, ensure_ascii=False))
+
+
+# ── Cache prune helpers ────────────────────────────────────────────────
+
+def _prune_caches() -> None:
+    now = time.time()
+    # Domain age: clear expired
+    _domain_age_cache.clear()
+    # Resolve: cap size
+    if len(_resolve_cache) > _RESOLVE_CACHE_MAX:
+        _resolve_cache.clear()
+    # OCR memo: cap size
+    if len(_MEMO_OCR) > _MEMO_OCR_MAX:
+        _MEMO_OCR.clear()
+    # Crosspost: prune expired
+    stale = [h for h, entries in _crosspost.items() if all(now - t > 3600 for _, t in entries)]
+    for h in stale:
+        del _crosspost[h]
+    if len(_crosspost) > _CROSSPOST_MAX:
+        _crosspost.clear()
 
 
 class Detector:
@@ -419,11 +489,9 @@ class Detector:
             return None
         model = gc.get("ai_model", "gpt-4o-mini")
         bonus = gc.get("ai_score_bonus", 30)
-        import os
-        if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
-            return None
         try:
             import litellm
+            import json as _json
             resp = await litellm.acompletion(
                 model=model,
                 messages=[
@@ -433,9 +501,13 @@ class Detector:
                 max_tokens=50,
                 temperature=0,
             )
-            import json as _json
-            body = resp.choices[0].message.content.strip()
-            body = body.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            msg = resp.choices[0].message
+            if not msg or not msg.content:
+                return None
+            body = msg.content.strip()
+            m = _JSON_RE.search(body)
+            if m:
+                body = m.group(0)
             parsed = _json.loads(body)
             if parsed.get("scam"):
                 log.info("AI flagged scam: %s", parsed.get("reason", ""))

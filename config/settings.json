@@ -20,7 +20,6 @@
   "alert_channel_id": null,
   "ping_role_id": null,
   "dm_author_on_alert": false,
-  "dm_message_template": "Your message in {channel} was flagged as potential scam (score: {score}). If you believe this is an error, please contact a moderator.",
   "auto_delete": false,
   "cooldown_seconds": 300,
   "reactions": {

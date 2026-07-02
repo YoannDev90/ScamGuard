@@ -407,9 +407,30 @@ class GuildConfig:
         self._save()
         return True
 
+    def get_whitelisted_users(self) -> list[int]:
+        return self.data.get("whitelist", {}).get("users", [])
+
+    def add_whitelisted_user(self, user_id: int) -> bool:
+        users = self.data.setdefault("whitelist", {}).setdefault("users", [])
+        if user_id in users:
+            return False
+        VersionManager(self).snapshot()
+        users.append(user_id)
+        self.data["_version"] += 1
+        self._save()
+        return True
+
+    def remove_whitelisted_user(self, user_id: int) -> bool:
+        users = self.data.get("whitelist", {}).get("users", [])
+        if user_id not in users:
+            return False
+        VersionManager(self).snapshot()
+        users.remove(user_id)
+        self.data["_version"] += 1
+        self._save()
+        return True
+
     def batch_apply(self, **changes) -> None:
-        from copy import deepcopy
-        prev = deepcopy(self.data)
         for key, value in changes.items():
             if key == "settings" and isinstance(value, dict):
                 self.data.setdefault("settings", {}).update(value)
@@ -433,11 +454,10 @@ class GuildConfig:
                 self._invalidate_cache()
                 self._save()
                 return
-        if self.data != prev:
-            VersionManager(self).snapshot()
-            self.data["_version"] = self.data.get("_version", 0) + 1
-            self._invalidate_cache()
-            self._save()
+        VersionManager(self).snapshot()
+        self.data["_version"] = self.data.get("_version", 0) + 1
+        self._invalidate_cache()
+        self._save()
 
     def reset(self) -> None:
         VersionManager(self).snapshot()

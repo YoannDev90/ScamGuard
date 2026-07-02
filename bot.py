@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import logging
 import os
 import sys
 import warnings
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import colorama
@@ -58,7 +60,6 @@ root.addHandler(console)
 
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
-from logging.handlers import TimedRotatingFileHandler
 file_h = TimedRotatingFileHandler(log_dir / "scanguard.log", when="midnight", backupCount=14, encoding="utf-8")
 file_h.setFormatter(logging.Formatter(_fmt, datefmt=_datefmt))
 root.addHandler(file_h)
@@ -94,6 +95,18 @@ bot = commands.Bot(
 @bot.event
 async def on_ready() -> None:
     log.info("Bot connected as %s  (ID: %s)", bot.user, bot.user.id)
+
+
+def _cleanup() -> None:
+    from core.stats import flush_all
+    from cogs._detection import _save_session, _prune_caches
+    _prune_caches()
+    _save_session()
+    flush_all()
+    log.info("Stats + session saved on shutdown")
+
+
+atexit.register(_cleanup)
 
 
 @bot.event
@@ -132,6 +145,10 @@ async def setup_hook() -> None:
     await load_cogs()
     await bot.tree.sync()
     log.info("Slash commands synchronised")
+
+    from cogs._detection import _load_session
+    _load_session()
+    log.info("Session data loaded")
 
     if not getattr(bot, "light_mode", False):
         monitor = bot.get_cog("Monitor")

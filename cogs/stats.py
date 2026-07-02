@@ -22,7 +22,6 @@ class Stats(commands.Cog, name="Stats"):
     async def stats(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         sm = get_stats(interaction.guild_id)
-        import time
         first = sm.get("first_seen", 0)
         embed = discord.Embed(
             title=f"📊 Detection stats — {interaction.guild.name}",

@@ -32,7 +32,6 @@ class Core(commands.Cog, name="Core"):
         await interaction.edit_original_response(content=None, embed=embed)
 
     @app_commands.command(name="test-detect", description="Analyze a message against keywords")
-    @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(message_id="Message ID", channel="Channel (default: current)")
     async def test_detect(
         self,
@@ -41,6 +40,12 @@ class Core(commands.Cog, name="Core"):
         channel: discord.TextChannel = None,
     ) -> None:
         await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        has_perm = interaction.permissions.manage_guild or interaction.permissions.manage_messages
+        whitelisted = interaction.user.id in gc.get_whitelisted_users()
+        if not has_perm and not whitelisted:
+            await interaction.followup.send("Permission denied. Requires `Manage Guild`, `Manage Messages`, or whitelist.", ephemeral=True)
+            return
         channel = channel or interaction.channel
         try:
             msg = await channel.fetch_message(int(message_id))
@@ -184,13 +189,14 @@ class Core(commands.Cog, name="Core"):
         embed.add_field(name="⚙️ Config", value="`/config show` — Voir la configuration actuelle", inline=True)
         embed.add_field(name="🛡️ Protection active", value="Le bot analyse automatiquement les messages. Aucune action manuelle requise.", inline=False)
         embed.set_footer(text="ScamGuard • Questions ? /guide")
-        for channel in guild.text_channels:
-            if channel.permissions_for(guild.me).send_messages:
-                try:
-                    await channel.send(embed=embed)
-                except discord.Forbidden:
-                    pass
-                break
+        target = guild.system_channel or next(
+            (ch for ch in guild.text_channels if ch.permissions_for(guild.me).send_messages), None
+        )
+        if target:
+            try:
+                await target.send(embed=embed)
+            except discord.Forbidden:
+                pass
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -12,12 +12,17 @@ log = logging.getLogger("core.stats")
 STATS_DIR = Path("data/stats")
 
 
+_FLUSH_DEBOUNCE = 10
+
+
 class StatsManager:
     """Tracks and persists detection statistics per guild."""
 
     def __init__(self, guild_id: int) -> None:
         self.guild_id = guild_id
         self.data: dict = self._load()
+        self._last_flush = 0.0
+        self._dirty = False
 
     def _path(self) -> Path:
         STATS_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,7 +35,7 @@ class StatsManager:
                 with open(p) as f:
                     return json.load(f)
             except Exception:
-                pass
+                log.warning("Corrupted stats file %s, resetting", p)
         return {
             "guild_id": self.guild_id,
             "first_seen": int(time.time()),
@@ -45,38 +50,39 @@ class StatsManager:
         with open(self._path(), "w") as f:
             json.dump(self.data, f, indent=2)
 
+    def _mark_dirty(self) -> None:
+        self._dirty = True
+        now = time.time()
+        if now - self._last_flush >= _FLUSH_DEBOUNCE:
+            self._save()
+            self._last_flush = now
+            self._dirty = False
+
     def increment_scanned(self) -> None:
         self.data["total_scanned"] += 1
+        self._mark_dirty()
 
     def increment_scam(self) -> None:
         self.data["scam_detected"] += 1
+        self._mark_dirty()
 
     def increment_suspicious(self) -> None:
         self.data["suspicious_detected"] += 1
+        self._mark_dirty()
 
     def increment_banned_image(self) -> None:
         self.data["banned_images"] += 1
+        self._mark_dirty()
 
     def increment_actions(self) -> None:
         self.data["actions_taken"] += 1
+        self._mark_dirty()
 
     def flush(self) -> None:
-        self._save()
-
-    def get(self, key: str, default=None):
-        return self.data.get(key, default)
-
-    def reset(self) -> None:
-        self.data = {
-            "guild_id": self.guild_id,
-            "first_seen": int(time.time()),
-            "total_scanned": 0,
-            "scam_detected": 0,
-            "suspicious_detected": 0,
-            "banned_images": 0,
-            "actions_taken": 0,
-        }
-        self._save()
+        if self._dirty:
+            self._save()
+            self._last_flush = time.time()
+            self._dirty = False
 
     def summary(self) -> str:
         fields = (
@@ -100,4 +106,5 @@ def get_stats(guild_id: int) -> StatsManager:
 
 def flush_all() -> None:
     for sm in _stats_cache.values():
+        sm._dirty = True
         sm.flush()

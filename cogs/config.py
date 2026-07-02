@@ -42,7 +42,7 @@ SETTINGS_TYPES: dict[str, type | tuple] = {
     "language": list, "banned_images_threshold": int, "banned_images_score": int,
     "banned_images_dir": str,
     "log_channel_names": list, "alert_channel_id": (int, type(None)), "ping_role_id": (int, type(None)),
-    "dm_author_on_alert": bool, "dm_message_template": str, "auto_delete": bool, "cooldown_seconds": int,
+    "dm_author_on_alert": bool, "auto_delete": bool, "cooldown_seconds": int,
     "community_confirm_count": int, "report_emoji": str, "enable_report": bool,
     "reactions": dict, "embed_colors": dict, "embed_dark_red_threshold": int, "warn_message_default": str,
     "debug_mode": bool, "logging_level": str,
@@ -324,11 +324,16 @@ class Config(commands.Cog, name="Config"):
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
         entry = {"type": action}
-        if channel: entry["channel_id"] = channel.id
-        if role: entry["role_id"] = role.id
-        if user: entry["user_ids"] = [user.id]
-        if duration: entry["duration"] = duration
-        if message: entry["message"] = message
+        if channel:
+            entry["channel_id"] = channel.id
+        if role:
+            entry["role_id"] = role.id
+        if user:
+            entry["user_ids"] = [user.id]
+        if duration:
+            entry["duration"] = duration
+        if message:
+            entry["message"] = message
         gc.add_action(trigger, entry)
         embed = discord.Embed(title="Action added", colour=discord.Colour.green())
         embed.add_field(name="Trigger", value=trigger, inline=True)
@@ -467,6 +472,31 @@ class Config(commands.Cog, name="Config"):
             return
         lines = [f"- `{d}`" for d in sorted(domains)]
         embed = discord.Embed(title=f"Whitelisted domains ({len(domains)})", description="\n".join(lines), colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @config.command(name="whitelist-user", description="Add/remove a user whitelisted for /test-detect")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.choices(action=[app_commands.Choice(name="Add", value="add"), app_commands.Choice(name="Remove", value="remove")])
+    async def config_whitelist_user(self, interaction: discord.Interaction, action: str, user: discord.User) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        if action == "add":
+            ok = gc.add_whitelisted_user(user.id)
+            await interaction.followup.send(f"{user.mention} whitelisted for /test-detect." if ok else f"{user.mention} already whitelisted.", ephemeral=True)
+        else:
+            ok = gc.remove_whitelisted_user(user.id)
+            await interaction.followup.send(f"{user.mention} removed from whitelist." if ok else f"{user.mention} not in whitelist.", ephemeral=True)
+
+    @config.command(name="whitelist-users", description="List users whitelisted for /test-detect")
+    async def config_whitelist_users_list(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        users = gc.get_whitelisted_users()
+        if not users:
+            await interaction.followup.send("No whitelisted users.", ephemeral=True)
+            return
+        mentions = " ".join(f"<@{uid}>" for uid in users)
+        embed = discord.Embed(title=f"Whitelisted users ({len(users)})", description=mentions, colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ── Versions ─────────────────────────────────────────────────────
