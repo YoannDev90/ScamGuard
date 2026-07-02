@@ -37,6 +37,27 @@ class Monitor(commands.Cog, name="Monitor"):
         self._cooldowns = {k: v for k, v in self._cooldowns.items() if v >= cutoff}
         self._last_cooldown_cleanup = now
 
+    async def _batch_cleanup(self, message: discord.Message) -> None:
+        """Delete recent messages from the same author in the same channel."""
+        try:
+            to_delete = []
+            async for msg in message.channel.history(limit=50, before=message):
+                if msg.author.id == message.author.id:
+                    to_delete.append(msg)
+            while to_delete:
+                batch = to_delete[:100]
+                to_delete = to_delete[100:]
+                if len(batch) == 1:
+                    await batch[0].delete()
+                else:
+                    await message.channel.delete_messages(batch)
+            log.info("Batch cleanup: deleted messages from user %d in #%s",
+                     message.author.id, message.channel.name)
+        except discord.Forbidden:
+            log.debug("Batch cleanup: missing manage_messages in #%s", message.channel.name)
+        except discord.HTTPException as e:
+            log.debug("Batch cleanup: HTTP error %s", e)
+
     # ── Alert embed ──────────────────────────────────────────────────
 
     async def _send_alert(self, message: discord.Message, result: dict, gc) -> None:
@@ -122,12 +143,6 @@ class Monitor(commands.Cog, name="Monitor"):
             sm.flush()
             return
 
-        # Cooldown check
-        cd = gc.get("cooldown_seconds", 300)
-        now = message.created_at.timestamp()
-        last = self._cooldowns.get(uid, 0)
-        on_cooldown = (now - last) < cd
-
         # Reaction (visual feedback)
         reactions_cfg = gc.get("reactions", {})
         try:
@@ -137,20 +152,34 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.HTTPException:
             pass
 
-        if on_cooldown:
-            sm.flush()
-            log.debug("Cooldown active user=%d msg=%d", uid, message.id)
-            return
+        # Cooldown: only skips alert spam, NOT actions
+        cd = gc.get("cooldown_seconds", 300)
+        now = message.created_at.timestamp()
+        last = self._cooldowns.get(uid, 0)
+        on_cooldown = (now - last) < cd
 
-        # Execute actions (confidence-based, no separate banned_image trigger)
         trigger = "scam" if is_scam else "suspicious"
-        await execute_actions(trigger, message, result)
-        sm.increment_actions()
+        actions = gc.get_actions(trigger)
+        action_types = [a.get("type", "") for a in actions]
+
+        # Execute actions (always, cooldown or not)
+        if actions:
+            await execute_actions(trigger, message, result)
+            sm.increment_actions()
+            # Batch cleanup: if actions include delete, purge recent messages from same user
+            if "delete" in action_types and message.channel.permissions_for(message.guild.me).manage_messages:
+                await self._batch_cleanup(message)
+
         sm.flush()
         self._cooldowns[uid] = now
         self._clean_cooldowns()
         log.warning("DETECTED guild=%d msg=%d author=%d score=%d trigger=%s", gid, message.id, uid, result["score"], trigger)
-        await self._send_alert(message, result, gc)
+
+        # Alert skipped if on cooldown (avoid spam in alert channel)
+        if not on_cooldown:
+            await self._send_alert(message, result, gc)
+        else:
+            log.debug("Alert skip (cooldown) user=%d msg=%d", uid, message.id)
 
     # ── Community reaction system ────────────────────────────────────
 
