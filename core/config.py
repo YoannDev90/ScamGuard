@@ -258,6 +258,45 @@ class GuildConfig:
             self._save()
             return True
 
+    # ── Batch operations ────────────────────────────────────────────
+
+    def batch_apply(self, **changes) -> None:
+        """Apply multiple changes with a single version snapshot.
+
+        Supported: settings (dict), actions (dict of trigger→list full replacement),
+        patterns (list), reset (bool).
+        """
+        from copy import deepcopy
+        prev = deepcopy(self.data)
+        for key, value in changes.items():
+            if key == "settings" and isinstance(value, dict):
+                self.data.setdefault("settings", {}).update(value)
+            elif key == "actions" and isinstance(value, dict):
+                self.data["actions"] = {
+                    "scam": value.get("scam", []),
+                    "suspicious": value.get("suspicious", []),
+                    "banned_image": value.get("banned_image", []),
+                }
+            elif key == "patterns" and isinstance(value, list):
+                self.data["patterns"] = value
+            elif key == "reset" and value:
+                self.data = {
+                    "guild_id": self.guild_id,
+                    "_version": self.data.get("_version", 0) + 1,
+                    "settings": {},
+                    "patterns": [],
+                    "actions": {"scam": [], "suspicious": [], "banned_image": []},
+                    "ignored": {"user_ids": [], "role_ids": [], "channel_ids": []},
+                }
+                self._invalidate_cache()
+                self._save()
+                return
+        if self.data != prev:
+            VersionManager(self).snapshot()
+            self.data["_version"] = self.data.get("_version", 0) + 1
+            self._invalidate_cache()
+            self._save()
+
     # ── Utility ──────────────────────────────────────────────────────
 
     def reset(self) -> None:

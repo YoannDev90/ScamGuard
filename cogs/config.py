@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
@@ -522,14 +523,17 @@ class SetupState:
         self.step: int = 0
 
     def apply(self, gc) -> None:
-        gc.set("alert_channel_id", self.channel_id)
-        gc.set("auto_delete", self.auto_delete)
-        gc.set("dm_author_on_alert", self.dm_author)
         profile = PROFILES[self.profile]
-        for trigger, actions in profile["actions"].items():
-            gc.clear_actions(trigger)
-            for a in actions:
-                gc.add_action(trigger, a)
+        actions = deepcopy(gc.data.get("actions", {}))
+        actions.update({t: list(a) for t, a in profile["actions"].items()})
+        gc.batch_apply(
+            settings={
+                "alert_channel_id": self.channel_id,
+                "auto_delete": self.auto_delete,
+                "dm_author_on_alert": self.dm_author,
+            },
+            actions=actions,
+        )
 
     def summary(self) -> str:
         p = PROFILES[self.profile]

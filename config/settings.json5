@@ -19,14 +19,7 @@
   // ------------------------------------------------------------------
   image_max_size: 5242880, // Max image download size (bytes, 5 MB)
   image_download_timeout: 30, // Seconds to wait for image download
-  supported_extensions: [
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".webp",
-    ".bmp",
-  ],
+  supported_extensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"],
   ocr_timeout: 30, // Seconds to wait for OCR processing
   max_ocr_length: 10000, // Max characters of OCR text stored
   language: ["fr", "en"], // OCR languages (easyocr codes)
@@ -65,11 +58,11 @@
   // Embed colours
   // ------------------------------------------------------------------
   embed_colors: {
-    scam: 0xE74C3C,
-    suspicious: 0xE67E22,
-    banned_image: 0x9B59B6,
-    ok: 0x2ECC71,
-    config: 0x3498DB,
+    scam: 0xe74c3c,
+    suspicious: 0xe67e22,
+    banned_image: 0x9b59b6,
+    ok: 0x2ecc71,
+    config: 0x3498db,
   },
 
   embed_dark_red_threshold: 70,
@@ -86,10 +79,7 @@
   // Actions
   // ------------------------------------------------------------------
   actions: {
-    scam: [
-      { type: "delete" },
-      { type: "ban" },
-    ],
+    scam: [{ type: "delete" }, { type: "ban" }],
     suspicious: [],
     banned_image: [],
   },
@@ -97,6 +87,6 @@
   // ------------------------------------------------------------------
   // Debug / misc
   // ------------------------------------------------------------------
-  debug_mode: false,
-  logging_level: "INFO",
+  debug_mode: true,
+  logging_level: "DEBUG",
 }

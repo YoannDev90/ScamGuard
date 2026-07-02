@@ -94,8 +94,9 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 log.warning("Action: softban %d guild=%d", member.id, guild.id)
 
             elif atype == "timeout":
+                import datetime
                 duration = action.get("duration", 60)
-                await member.timeout(duration * 60, reason=reason)
+                await member.timeout(datetime.timedelta(minutes=duration), reason=reason)
                 log.info("Action: timeout %d (%d min) guild=%d", member.id, duration, guild.id)
 
             elif atype == "notify_channel":
@@ -152,7 +153,10 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                     log.debug("Action: log channel %s not found guild=%d", ch_id, guild.id)
 
         except discord.Forbidden:
-            log.warning("Action %s: no perms on %d guild=%d", atype, member.id, guild.id)
+            owner_id = guild.owner_id
+            reason = "user is guild owner" if member.id == owner_id else "bot lacks permissions"
+            log.warning("Action %s failed for %d guild=%d: %s", atype, member.id, guild.id, reason)
+            embed.add_field(name="⚠️ Action failed", value=f"`{atype}` — {reason}", inline=False)
         except discord.HTTPException as exc:
             log.warning("Action %s: HTTP error %d: %s guild=%d", atype, member.id, exc, guild.id)
         except Exception as exc:
