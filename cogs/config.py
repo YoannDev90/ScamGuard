@@ -451,37 +451,20 @@ PROFILES = {
     },
 }
 
-LANG_OPTIONS = [
-    ("fr+en", "Français + English"),
-    ("en", "English only"),
-    ("fr", "Français seulement"),
-    ("en+es", "English + Español"),
-    ("fr+en+de", "Français + English + Deutsch"),
-    ("fr+en+ar", "Français + English + العربية"),
-]
-
-
 class SetupState:
     def __init__(self, guild_id: int, author_id: int):
         self.guild_id = guild_id
         self.author_id = author_id
         self.channel_id: int | None = None
         self.profile: str = "aggressive"
-        self.languages: str = "fr+en"
         self.auto_delete: bool = False
         self.dm_author: bool = False
         self.step: int = 0
-
-    @property
-    def done(self) -> bool:
-        return self.channel_id is not None
 
     def apply(self, gc) -> None:
         gc.set("alert_channel_id", self.channel_id)
         gc.set("auto_delete", self.auto_delete)
         gc.set("dm_author_on_alert", self.dm_author)
-        lang_list = [l.strip() for l in self.languages.split("+")]
-        gc.set("language", lang_list)
         profile = PROFILES[self.profile]
         for trigger, actions in profile["actions"].items():
             gc.clear_actions(trigger)
@@ -490,11 +473,9 @@ class SetupState:
 
     def summary(self) -> str:
         p = PROFILES[self.profile]
-        langs = dict(LANG_OPTIONS).get(self.languages, self.languages)
         return (
             f"**Channel:** <#{self.channel_id}>\n"
             f"**Profile:** {p['emoji']} {p['label']}\n"
-            f"**Languages:** {langs}\n"
             f"**Auto-delete:** {'✅' if self.auto_delete else '❌'}\n"
             f"**DM author:** {'✅' if self.dm_author else '❌'}"
         )
@@ -521,14 +502,13 @@ class SetupView(discord.ui.View):
                     "I'll guide you through:\n"
                     "1. 📢 Pick an alert channel\n"
                     "2. 🛡️ Choose a security profile\n"
-                    "3. 🌍 OCR languages\n"
-                    "4. ⚙️ Extra options\n"
-                    "5. ✅ Review & apply\n\n"
+                    "3. ⚙️ Extra options\n"
+                    "4. ✅ Review & apply\n\n"
                     "You can always tweak everything later with `/config` commands."
                 ),
                 colour=discord.Colour.blue(),
             )
-            embed.set_footer(text="Step 1/5 — Click Next to start")
+            embed.set_footer(text="Step 1/4 — Click Next to start")
             self.add_item(NavButton("▶️ Next", "next", self))
             await interaction.response.edit_message(embed=embed, view=self)
 
@@ -538,7 +518,7 @@ class SetupView(discord.ui.View):
                 description="Where should I send scam alerts and logs?",
                 colour=discord.Colour.blue(),
             )
-            embed.set_footer(text="Step 1/5 — Pick a channel or keep current")
+            embed.set_footer(text="Step 1/4 — Pick a channel or keep current")
             select = ChannelSelect(self.state, self.guild, self)
             self.add_item(select)
             self.add_item(NavButton("◀️ Back", "prev", self))
@@ -552,7 +532,7 @@ class SetupView(discord.ui.View):
                 description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/config actions-add`.",
                 colour=discord.Colour.blue(),
             )
-            embed.set_footer(text="Step 2/5 — Pick a profile")
+            embed.set_footer(text="Step 2/4 — Pick a profile")
             select = ProfileSelect(self.state, self)
             self.add_item(select)
             self.add_item(NavButton("◀️ Back", "prev", self))
@@ -561,37 +541,24 @@ class SetupView(discord.ui.View):
 
         elif state.step == 3:
             embed = discord.Embed(
-                title="🌍 OCR Languages",
-                description="Which languages should the bot scan for? Affects scam pattern detection accuracy.",
-                colour=discord.Colour.blue(),
-            )
-            embed.set_footer(text="Step 3/5 — Pick languages")
-            select = LangSelect(self.state, self)
-            self.add_item(select)
-            self.add_item(NavButton("◀️ Back", "prev", self))
-            self.add_item(NavButton("Next ▶️", "next", self))
-            await interaction.response.edit_message(embed=embed, view=self)
-
-        elif state.step == 4:
-            embed = discord.Embed(
                 title="⚙️ Extra options",
                 description="Toggle additional behaviours:",
                 colour=discord.Colour.blue(),
             )
-            embed.set_footer(text="Step 4/5 — Toggle options")
+            embed.set_footer(text="Step 3/4 — Toggle options")
             self.add_item(ToggleButton("auto_delete", "🗑️ Auto-delete", "Delete scam messages automatically", self.state, self))
             self.add_item(ToggleButton("dm_author", "✉️ DM author", "Send a DM to the flagged user", self.state, self))
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(NavButton("Next ▶️", "next", self))
             await interaction.response.edit_message(embed=embed, view=self)
 
-        elif state.step == 5:
+        elif state.step == 4:
             embed = discord.Embed(
                 title="✅ Review & apply",
                 description=f"{state.summary()}\n\nEverything look good?",
                 colour=discord.Colour.green(),
             )
-            embed.set_footer(text="Step 5/5 — Confirm to apply")
+            embed.set_footer(text="Step 4/4 — Confirm to apply")
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(ConfirmButton(self.state, self.guild, self))
 
@@ -632,25 +599,6 @@ class ProfileSelect(discord.ui.Select):
         await self._view.render(interaction)
 
 
-class LangSelect(discord.ui.Select):
-    def __init__(self, state: SetupState, view: SetupView) -> None:
-        self._state = state
-        self._view = view
-        options = [
-            discord.SelectOption(
-                label=label,
-                value=key,
-                default=key == state.languages,
-            )
-            for key, label in LANG_OPTIONS
-        ]
-        super().__init__(placeholder="Pick languages…", options=options)
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        self._state.languages = self.values[0]
-        await self._view.render(interaction)
-
-
 class ToggleButton(discord.ui.Button):
     def __init__(self, attr: str, label: str, desc: str, state: SetupState, view: SetupView) -> None:
         self._attr = attr
@@ -676,7 +624,7 @@ class NavButton(discord.ui.Button):
                 ch = interaction.channel
                 if isinstance(ch, discord.TextChannel):
                     self._view.state.channel_id = ch.id
-            self._view.state.step = min(self._view.state.step + 1, 5)
+            self._view.state.step = min(self._view.state.step + 1, 4)
         else:
             self._view.state.step = max(self._view.state.step - 1, 0)
         await self._view.render(interaction)
