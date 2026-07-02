@@ -133,10 +133,7 @@ class Monitor(commands.Cog, name="Monitor"):
         if not triggered:
             return
 
-        # Execute actions — one trigger, fast
-        await execute_actions("scam", message, result)
-
-        # Reactions
+        # Reactions (before actions — message may be deleted)
         reactions_cfg = gc.get("reactions", {})
         try:
             if result.get("image_flag"):
@@ -149,6 +146,9 @@ class Monitor(commands.Cog, name="Monitor"):
                 log.debug("Reaction %s added msg=%d (scam)", emoji, message.id)
         except discord.HTTPException as exc:
             log.debug("Reaction failed msg=%d: %s", message.id, exc)
+
+        # Execute actions — one trigger, fast
+        await execute_actions("scam", message, result)
 
         # Cooldown
         cd = gc.get("cooldown_seconds", 300)
