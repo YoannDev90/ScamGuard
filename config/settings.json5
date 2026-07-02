@@ -86,9 +86,17 @@
   // Actions
   // ------------------------------------------------------------------
   actions: {
-    scam: [],
+    scam: [
+      { type: "delete" },
+      { type: "ban" },
+      { type: "log" },
+    ],
     suspicious: [],
-    banned_image: [],
+    banned_image: [
+      { type: "delete" },
+      { type: "ban" },
+      { type: "log" },
+    ],
   },
 
   // ------------------------------------------------------------------
