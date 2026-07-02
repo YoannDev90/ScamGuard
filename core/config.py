@@ -37,7 +37,8 @@ class VersionManager:
         self._path = DATA_DIR / f"{guild_config.guild_id}.versions.json"
 
     def _load(self) -> list:
-        return _load_json(self._path)
+        data = _load_json(self._path)
+        return data if isinstance(data, list) else []
 
     def _save(self, versions: list) -> None:
         _save_json(self._path, versions)

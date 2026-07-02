@@ -419,6 +419,309 @@ class Config(commands.Cog, name="Config"):
             await interaction.followup.send(f"Error: {exc}", ephemeral=True)
 
 
+# ── Setup wizard ─────────────────────────────────────────────────────────
+
+PROFILES = {
+    "aggressive": {
+        "emoji": "🔴", "label": "Aggressive",
+        "desc": "Delete + ban + log on scam & banned images. Zero tolerance.",
+        "actions": {
+            "scam": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
+            "suspicious": [],
+            "banned_image": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
+        },
+    },
+    "balanced": {
+        "emoji": "🟡", "label": "Balanced",
+        "desc": "Delete + timeout + warn + log on scam. Warn + log on suspicious.",
+        "actions": {
+            "scam": [{"type": "delete"}, {"type": "timeout", "duration": 60}, {"type": "warn"}, {"type": "log"}],
+            "suspicious": [{"type": "warn"}, {"type": "log"}],
+            "banned_image": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
+        },
+    },
+    "gentle": {
+        "emoji": "🟢", "label": "Gentle",
+        "desc": "Warn + log only. Manual moderation only, no automated bans.",
+        "actions": {
+            "scam": [{"type": "warn"}, {"type": "log"}],
+            "suspicious": [{"type": "warn"}, {"type": "log"}],
+            "banned_image": [{"type": "warn"}, {"type": "log"}],
+        },
+    },
+}
+
+LANG_OPTIONS = [
+    ("fr+en", "Français + English"),
+    ("en", "English only"),
+    ("fr", "Français seulement"),
+    ("en+es", "English + Español"),
+    ("fr+en+de", "Français + English + Deutsch"),
+    ("fr+en+ar", "Français + English + العربية"),
+]
+
+
+class SetupState:
+    def __init__(self, guild_id: int, author_id: int):
+        self.guild_id = guild_id
+        self.author_id = author_id
+        self.channel_id: int | None = None
+        self.profile: str = "aggressive"
+        self.languages: str = "fr+en"
+        self.auto_delete: bool = False
+        self.dm_author: bool = False
+        self.step: int = 0
+
+    @property
+    def done(self) -> bool:
+        return self.channel_id is not None
+
+    def apply(self, gc) -> None:
+        gc.set("alert_channel_id", self.channel_id)
+        gc.set("auto_delete", self.auto_delete)
+        gc.set("dm_author_on_alert", self.dm_author)
+        lang_list = [l.strip() for l in self.languages.split("+")]
+        gc.set("language", lang_list)
+        profile = PROFILES[self.profile]
+        for trigger, actions in profile["actions"].items():
+            gc.clear_actions(trigger)
+            for a in actions:
+                gc.add_action(trigger, a)
+
+    def summary(self) -> str:
+        p = PROFILES[self.profile]
+        langs = dict(LANG_OPTIONS).get(self.languages, self.languages)
+        return (
+            f"**Channel:** <#{self.channel_id}>\n"
+            f"**Profile:** {p['emoji']} {p['label']}\n"
+            f"**Languages:** {langs}\n"
+            f"**Auto-delete:** {'✅' if self.auto_delete else '❌'}\n"
+            f"**DM author:** {'✅' if self.dm_author else '❌'}"
+        )
+
+
+_wizards: dict[int, SetupState] = {}
+
+
+class SetupView(discord.ui.View):
+    def __init__(self, state: SetupState, guild: discord.Guild) -> None:
+        super().__init__(timeout=300)
+        self.state = state
+        self.guild = guild
+
+    async def render(self, interaction: discord.Interaction) -> None:
+        self.clear_items()
+        state = self.state
+
+        if state.step == 0:
+            embed = discord.Embed(
+                title="🚀 ScamGuard Setup",
+                description=(
+                    "Let's get your server protected in a few clicks.\n\n"
+                    "I'll guide you through:\n"
+                    "1. 📢 Pick an alert channel\n"
+                    "2. 🛡️ Choose a security profile\n"
+                    "3. 🌍 OCR languages\n"
+                    "4. ⚙️ Extra options\n"
+                    "5. ✅ Review & apply\n\n"
+                    "You can always tweak everything later with `/config` commands."
+                ),
+                colour=discord.Colour.blue(),
+            )
+            embed.set_footer(text="Step 1/5 — Click Next to start")
+            self.add_item(NavButton("▶️ Next", "next", self))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        elif state.step == 1:
+            embed = discord.Embed(
+                title="📢 Alert channel",
+                description="Where should I send scam alerts and logs?",
+                colour=discord.Colour.blue(),
+            )
+            embed.set_footer(text="Step 1/5 — Pick a channel or keep current")
+            select = ChannelSelect(self.state, self.guild, self)
+            self.add_item(select)
+            self.add_item(NavButton("◀️ Back", "prev", self))
+            self.add_item(NavButton("Next ▶️", "next", self))
+            self.add_item(NavButton("⏭️ Skip (current)", "next", self))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        elif state.step == 2:
+            embed = discord.Embed(
+                title="🛡️ Security profile",
+                description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/config actions-add`.",
+                colour=discord.Colour.blue(),
+            )
+            embed.set_footer(text="Step 2/5 — Pick a profile")
+            select = ProfileSelect(self.state, self)
+            self.add_item(select)
+            self.add_item(NavButton("◀️ Back", "prev", self))
+            self.add_item(NavButton("Next ▶️", "next", self))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        elif state.step == 3:
+            embed = discord.Embed(
+                title="🌍 OCR Languages",
+                description="Which languages should the bot scan for? Affects scam pattern detection accuracy.",
+                colour=discord.Colour.blue(),
+            )
+            embed.set_footer(text="Step 3/5 — Pick languages")
+            select = LangSelect(self.state, self)
+            self.add_item(select)
+            self.add_item(NavButton("◀️ Back", "prev", self))
+            self.add_item(NavButton("Next ▶️", "next", self))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        elif state.step == 4:
+            embed = discord.Embed(
+                title="⚙️ Extra options",
+                description="Toggle additional behaviours:",
+                colour=discord.Colour.blue(),
+            )
+            embed.set_footer(text="Step 4/5 — Toggle options")
+            self.add_item(ToggleButton("auto_delete", "🗑️ Auto-delete", "Delete scam messages automatically", self.state, self))
+            self.add_item(ToggleButton("dm_author", "✉️ DM author", "Send a DM to the flagged user", self.state, self))
+            self.add_item(NavButton("◀️ Back", "prev", self))
+            self.add_item(NavButton("Next ▶️", "next", self))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        elif state.step == 5:
+            embed = discord.Embed(
+                title="✅ Review & apply",
+                description=f"{state.summary()}\n\nEverything look good?",
+                colour=discord.Colour.green(),
+            )
+            embed.set_footer(text="Step 5/5 — Confirm to apply")
+            self.add_item(NavButton("◀️ Back", "prev", self))
+            self.add_item(ConfirmButton(self.state, self.guild, self))
+
+    async def on_timeout(self) -> None:
+        gid = self.state.guild_id
+        _wizards.pop(gid, None)
+
+
+class ChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, state: SetupState, guild: discord.Guild, view: SetupView) -> None:
+        super().__init__(channel_types=[discord.ChannelType.text], placeholder="Pick a channel…")
+        self._state = state
+        self._guild = guild
+        self._view = view
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self._state.channel_id = self.values[0].id
+        await self._view.render(interaction)
+
+
+class ProfileSelect(discord.ui.Select):
+    def __init__(self, state: SetupState, view: SetupView) -> None:
+        self._state = state
+        self._view = view
+        options = [
+            discord.SelectOption(
+                label=f"{p['emoji']} {p['label']}",
+                description=p["desc"][:100],
+                value=key,
+                default=key == state.profile,
+            )
+            for key, p in PROFILES.items()
+        ]
+        super().__init__(placeholder="Pick a profile…", options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self._state.profile = self.values[0]
+        await self._view.render(interaction)
+
+
+class LangSelect(discord.ui.Select):
+    def __init__(self, state: SetupState, view: SetupView) -> None:
+        self._state = state
+        self._view = view
+        options = [
+            discord.SelectOption(
+                label=label,
+                value=key,
+                default=key == state.languages,
+            )
+            for key, label in LANG_OPTIONS
+        ]
+        super().__init__(placeholder="Pick languages…", options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self._state.languages = self.values[0]
+        await self._view.render(interaction)
+
+
+class ToggleButton(discord.ui.Button):
+    def __init__(self, attr: str, label: str, desc: str, state: SetupState, view: SetupView) -> None:
+        self._attr = attr
+        self._state = state
+        self._view = view
+        current = getattr(state, attr)
+        super().__init__(label=f"{'✅' if current else '❌'} {label}", style=discord.ButtonStyle.secondary if not current else discord.ButtonStyle.primary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        setattr(self._state, self._attr, not getattr(self._state, self._attr))
+        await self._view.render(interaction)
+
+
+class NavButton(discord.ui.Button):
+    def __init__(self, label: str, direction: str, view: SetupView) -> None:
+        self._direction = direction
+        self._view = view
+        super().__init__(label=label, style=discord.ButtonStyle.secondary if direction == "prev" else discord.ButtonStyle.primary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self._direction == "next":
+            if self._view.state.step == 1 and self._view.state.channel_id is None:
+                ch = interaction.channel
+                if isinstance(ch, discord.TextChannel):
+                    self._view.state.channel_id = ch.id
+            self._view.state.step = min(self._view.state.step + 1, 5)
+        else:
+            self._view.state.step = max(self._view.state.step - 1, 0)
+        await self._view.render(interaction)
+
+
+class ConfirmButton(discord.ui.Button):
+    def __init__(self, state: SetupState, guild: discord.Guild, view: SetupView) -> None:
+        self._state = state
+        self._guild = guild
+        self._view = view
+        super().__init__(label="✅ Apply configuration", style=discord.ButtonStyle.success)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not self._state.channel_id:
+            await interaction.response.send_message("Pick an alert channel first.", ephemeral=True)
+            return
+        gc = get_guild_config(self._state.guild_id)
+        self._state.apply(gc)
+        _wizards.pop(self._state.guild_id, None)
+        embed = discord.Embed(title="✅ Setup complete!", description=self._state.summary(), colour=discord.Colour.green())
+        embed.set_footer(text="Use /config to fine-tune")
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
+class ConfigSetup(commands.Cog, name="Setup"):
+    """Quick interactive setup wizard."""
+
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+
+    @app_commands.command(name="setup", description="Interactive setup wizard — configure the bot in a few clicks")
+    async def setup(self, interaction: discord.Interaction) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("Use this in a server.", ephemeral=True)
+            return
+        if _wizards.get(interaction.guild_id):
+            await interaction.response.send_message("A setup is already in progress. Finish or wait for timeout.", ephemeral=True)
+            return
+        state = SetupState(interaction.guild_id, interaction.user.id)
+        _wizards[interaction.guild_id] = state
+        view = SetupView(state, interaction.guild)
+        await view.render(interaction)
+
+
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Config(bot))
+    await bot.add_cog(ConfigSetup(bot))
 
