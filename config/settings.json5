@@ -89,14 +89,9 @@
     scam: [
       { type: "delete" },
       { type: "ban" },
-      { type: "log" },
     ],
     suspicious: [],
-    banned_image: [
-      { type: "delete" },
-      { type: "ban" },
-      { type: "log" },
-    ],
+    banned_image: [],
   },
 
   // ------------------------------------------------------------------

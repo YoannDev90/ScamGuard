@@ -1,24 +1,24 @@
-"""Message surveillance — delegates to detector + action engine."""
+"""Message surveillance — one detection, one embed, fast actions."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
 import discord
 from discord.ext import commands
-from bot import config as global_cfg
 from core.config import get_guild_config
 from cogs._detection import Detector
-from cogs._actions import execute_actions
+from cogs._actions import execute_actions, _build_alert_embed
 
 log = logging.getLogger("cogs.monitor")
 
-_COOLDOWN_CLEANUP_INTERVAL = 600  # purge stale entries every 10 min
+_COOLDOWN_CLEANUP_INTERVAL = 600
 
 
 class Monitor(commands.Cog, name="Monitor"):
-    """Listens to all messages, delegates to Detector and action executors."""
+    """Listens to messages, detects scams, executes actions, sends one alert."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -29,22 +29,40 @@ class Monitor(commands.Cog, name="Monitor"):
     async def cog_unload(self) -> None:
         await self.detector.close()
 
-    # ── Helpers ──────────────────────────────────────────────────────
-
     def _clean_cooldowns(self) -> None:
         now = time.time()
         if now - self._last_cooldown_cleanup < _COOLDOWN_CLEANUP_INTERVAL:
             return
-        cutoff = now - 3600  # prune > 1h old
+        cutoff = now - 3600
         self._cooldowns = {k: v for k, v in self._cooldowns.items() if v >= cutoff}
         self._last_cooldown_cleanup = now
 
-    def _legacy_embed_colour(self, score: int, gc) -> int:
-        ec = gc.get("embed_colors", {})
-        threshold = gc.get("embed_dark_red_threshold", 70)
-        if score >= threshold:
-            return discord.Colour.dark_red().value
-        return ec.get("scam", 0xE74C3C)
+    # ── Alert embed ──────────────────────────────────────────────────
+
+    async def _send_alert(self, message: discord.Message, result: dict, gc) -> None:
+        """Send one alert embed to the configured alert channel."""
+        ch_id = gc.get("alert_channel_id")
+        target = self.bot.get_channel(ch_id) if ch_id else None
+        if not target:
+            channels = gc.get("log_channel_names", ["logs", "admin", "alerts", "anti-scam"])
+            target = next((c for c in message.guild.text_channels if c.name in channels), None)
+        if not target:
+            return
+
+        trigger = "banned_image" if result.get("image_flag") else "scam"
+        embed = _build_alert_embed(message, result, gc, trigger=trigger)
+
+        ping = ""
+        ping_role = gc.get("ping_role_id")
+        if ping_role:
+            role = message.guild.get_role(ping_role)
+            if role:
+                ping = role.mention
+
+        try:
+            await target.send(content=ping or None, embed=embed)
+        except discord.Forbidden:
+            log.warning("Cannot send alert to #%s", target.name)
 
     # ── Message handler ──────────────────────────────────────────────
 
@@ -73,150 +91,62 @@ class Monitor(commands.Cog, name="Monitor"):
         if not urls and len(message.content.strip()) < min_len:
             return
 
-        if gc.get("debug_mode", False):
-            log.debug("Analyzing msg %d | guild=%d | author=%s | has_image=%s",
-                       message.id, message.guild.id, message.author, bool(urls))
-
         result = await self.detector.analyze_message(message, gc)
 
-        # Banned image check
-        banned_match = None
+        # Parallel banned-image check
         if urls:
             max_size = gc.get("image_max_size", 5242880)
             dl_timeout = gc.get("image_download_timeout", 30)
-            for url in urls:
-                data = await self.detector._download(url, max_size, dl_timeout)
-                if data is None:
-                    continue
-                banned_match = await self.detector.check_banned_image(data, gc)
-                if banned_match:
-                    break
+            download_sem = asyncio.Semaphore(10)
 
-        if banned_match:
-            result["image_flag"] = {"banned": banned_match}
-            banned_score = int(gc.get("banned_images_score", 50))
-            result["score"] += banned_score
-            result.setdefault("factors", []).append(
-                f"banned_image ({banned_match['matched']}, {banned_match['similarity']}%)"
-            )
-            log.warning("Banned image msg %d | guild=%d | matched=%s", message.id, message.guild.id, banned_match["matched"])
+            async def _check(url: str):
+                async with download_sem:
+                    data = await self.detector._download(url, max_size, dl_timeout)
+                    if data:
+                        return await self.detector.check_banned_image(data, gc)
+                    return None
 
-        # Execute actions
-        if result["is_scam"]:
-            await execute_actions("scam", message, result)
-        elif result["score"] >= gc.get("score_warn", 30):
-            await execute_actions("suspicious", message, result)
-        if banned_match:
-            await execute_actions("banned_image", message, result)
+            banned_matches = [m for m in await asyncio.gather(*[_check(u) for u in urls]) if m]
+            if banned_matches:
+                match = banned_matches[0]
+                result["image_flag"] = {"banned": match}
+                banned_score = int(gc.get("banned_images_score", 50))
+                result["score"] += banned_score
+                result.setdefault("factors", []).append(
+                    f"banned_image ({match['matched']}, {match['similarity']}%)"
+                )
+                log.warning("Banned image msg %d | guild=%d | matched=%s", message.id, message.guild.id, match["matched"])
+
+        triggered = result["is_scam"] or bool(result.get("image_flag"))
+
+        if not triggered:
+            return
+
+        # Execute actions — one trigger, fast
+        await execute_actions("scam", message, result)
 
         # Reactions
-        has_image_flag = bool(banned_match)
         reactions_cfg = gc.get("reactions", {})
         try:
-            if has_image_flag:
+            if result.get("image_flag"):
                 await message.add_reaction(reactions_cfg.get("banned_image", "\U0001f51e"))
-            if result["is_scam"]:
+            else:
                 await message.add_reaction(reactions_cfg.get("scam", "\U0001f6a8"))
-            elif result["score"] >= gc.get("score_warn", 30):
-                await message.add_reaction(reactions_cfg.get("suspicious", "\u26a0\ufe0f"))
         except discord.HTTPException:
             pass
 
-        # Legacy alerts
-        if has_image_flag:
-            await self._legacy_report_banned(message, result, gc)
-
-        if result["is_scam"]:
-            cd = gc.get("cooldown_seconds", 300)
-            now = message.created_at.timestamp()
-            if now - self._cooldowns.get(message.author.id, 0) < cd:
-                return
-            self._cooldowns[message.author.id] = now
-            self._clean_cooldowns()
-            log.warning("Scam msg %d | guild=%d | score=%d", message.id, message.guild.id, result["score"])
-            await self._legacy_notify(message, result, gc)
-
-    # ── Legacy helpers ───────────────────────────────────────────────
-
-    async def _legacy_notify(self, message: discord.Message, result: dict, gc) -> None:
-        if gc.get_actions("scam") and any(a["type"] in ("notify_channel", "notify_role", "notify_user") for a in gc.get_actions("scam")):
+        # Cooldown
+        cd = gc.get("cooldown_seconds", 300)
+        now = message.created_at.timestamp()
+        if now - self._cooldowns.get(message.author.id, 0) < cd:
             return
-        ch_id = gc.get("alert_channel_id")
-        target = self.bot.get_channel(ch_id) if ch_id else None
-        if not target:
-            channels = gc.get("log_channel_names", ["logs", "admin", "alerts"])
-            target = next((c for c in message.guild.text_channels if c.name in channels), message.channel)
-        ping = ""
-        ping_role = gc.get("ping_role_id")
-        if ping_role:
-            role = message.guild.get_role(ping_role)
-            if role:
-                ping = role.mention
-        score = result.get("score", 0)
-        embed = discord.Embed(
-            title="🚨 Scam detected",
-            colour=self._legacy_embed_colour(score, gc),
-            timestamp=discord.utils.utcnow(),
-        )
-        embed.add_field(name="Author", value=message.author.mention, inline=True)
-        embed.add_field(name="Channel", value=message.channel.mention, inline=True)
-        content = message.content
-        if content:
-            embed.add_field(name="Message", value=f"```{content[:1000]}```", inline=False)
-        factors = result.get("factors", [])
-        if factors:
-            embed.add_field(name="Reports", value="\n".join(f"- {f}" for f in factors), inline=False)
-        embed.set_footer(text=f"ID: {message.id}")
-        try:
-            await target.send(content=ping or None, embed=embed)
-        except discord.Forbidden:
-            log.warning("Cannot send legacy alert to #%s", target.name)
-        if gc.get("auto_delete", False):
-            try:
-                await message.delete()
-            except discord.Forbidden:
-                pass
-        if gc.get("dm_author_on_alert", False):
-            warn_msg = gc.get("warn_message_default", "Your message has been flagged.")
-            try:
-                await message.author.send(
-                    f"{warn_msg}\nServer: {message.guild.name}\nChannel: {message.channel.mention}"
-                )
-            except discord.Forbidden:
-                pass
+        self._cooldowns[message.author.id] = now
+        self._clean_cooldowns()
 
-    async def _legacy_report_banned(self, message: discord.Message, result: dict, gc) -> None:
-        if gc.get_actions("banned_image") and any(a["type"] in ("notify_channel", "log") for a in gc.get_actions("banned_image")):
-            return
-        ch_id = gc.get("alert_channel_id")
-        target = self.bot.get_channel(ch_id) if ch_id else None
-        if not target:
-            channels = gc.get("log_channel_names", ["logs", "admin", "alerts"])
-            target = next((c for c in message.guild.text_channels if c.name in channels), message.channel)
-        banned = result.get("image_flag", {}).get("banned")
-        ec = gc.get("embed_colors", {})
-        embed = discord.Embed(
-            title="🔞 Banned image detected",
-            colour=discord.Colour(ec.get("banned_image", 0x9B59B6)),
-            timestamp=discord.utils.utcnow(),
-        )
-        embed.add_field(name="Author", value=message.author.mention, inline=True)
-        embed.add_field(name="Channel", value=message.channel.mention, inline=True)
-        content = message.content
-        if content:
-            embed.add_field(name="Message", value=f"```{content[:1000]}```", inline=False)
-        if banned:
-            embed.add_field(name="Matched", value=f"`{banned['matched']}` ({banned['similarity']}%)", inline=False)
-        embed.set_footer(text=f"ID: {message.id}")
-        try:
-            await target.send(embed=embed)
-        except discord.Forbidden:
-            pass
-        if gc.get("auto_delete", False):
-            try:
-                await message.delete()
-            except discord.Forbidden:
-                pass
+        log.warning("Scam msg %d | guild=%d | score=%d", message.id, message.guild.id, result["score"])
+
+        # One alert embed
+        await self._send_alert(message, result, gc)
 
     # ── Community reaction system ────────────────────────────────────
 
@@ -234,13 +164,8 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.NotFound:
             return
 
-        report_emoji = gc.get("report_emoji", "\U0001f46e")
-        if gc.get("enable_report", True) and emoji == report_emoji and not any(r.me for r in msg.reactions if str(r.emoji) == report_emoji):
-            await self._legacy_notify(msg, {"score": 0, "is_scam": False, "factors": [f"Reported by <@{payload.user_id}>"]}, gc)
-
         reactions_cfg = gc.get("reactions", {})
         clear_emoji = reactions_cfg.get("clear", "\u2705")
-        alert_emoji = reactions_cfg.get("community_alert", "\U0001f6a8")
 
         if emoji == clear_emoji:
             for r in msg.reactions:
@@ -250,10 +175,19 @@ class Monitor(commands.Cog, name="Monitor"):
                             await r.remove(u)
                             break
 
+        alert_emoji = reactions_cfg.get("community_alert", "\U0001f6a8")
         if emoji == alert_emoji:
             count = sum(1 for r in msg.reactions if str(r.emoji) == alert_emoji and r.count > 1)
             if count >= gc.get("community_confirm_count", 3):
-                await self._legacy_notify(msg, {"score": 99, "is_scam": True, "factors": ["Community confirmed"]}, gc)
+                result = {"score": 99, "is_scam": True, "factors": ["Community confirmed"]}
+                await execute_actions("scam", msg, result)
+                await self._send_alert(msg, result, gc)
+
+        report_emoji = gc.get("report_emoji", "\U0001f46e")
+        if gc.get("enable_report", True) and emoji == report_emoji and not any(r.me for r in msg.reactions if str(r.emoji) == report_emoji):
+            result = {"score": 50, "is_scam": True, "factors": [f"Reported by <@{payload.user_id}>"]}
+            await execute_actions("scam", msg, result)
+            await self._send_alert(msg, result, gc)
 
 
 async def setup(bot: commands.Bot) -> None:

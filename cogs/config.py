@@ -490,29 +490,23 @@ class Config(commands.Cog, name="Config"):
 PROFILES = {
     "aggressive": {
         "emoji": "🔴", "label": "Aggressive",
-        "desc": "Delete + ban + log on scam & banned images. Zero tolerance.",
+        "desc": "Delete + ban. Zero tolerance.",
         "actions": {
-            "scam": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
-            "suspicious": [],
-            "banned_image": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
+            "scam": [{"type": "delete"}, {"type": "ban"}],
         },
     },
     "balanced": {
         "emoji": "🟡", "label": "Balanced",
-        "desc": "Delete + timeout + warn + log on scam. Warn + log on suspicious.",
+        "desc": "Delete + timeout 60 min + warn DM.",
         "actions": {
-            "scam": [{"type": "delete"}, {"type": "timeout", "duration": 60}, {"type": "warn"}, {"type": "log"}],
-            "suspicious": [{"type": "warn"}, {"type": "log"}],
-            "banned_image": [{"type": "delete"}, {"type": "ban"}, {"type": "log"}],
+            "scam": [{"type": "delete"}, {"type": "timeout", "duration": 60}, {"type": "warn"}],
         },
     },
     "gentle": {
         "emoji": "🟢", "label": "Gentle",
-        "desc": "Warn + log only. Manual moderation only, no automated bans.",
+        "desc": "Warn DM only. Manual moderation.",
         "actions": {
-            "scam": [{"type": "warn"}, {"type": "log"}],
-            "suspicious": [{"type": "warn"}, {"type": "log"}],
-            "banned_image": [{"type": "warn"}, {"type": "log"}],
+            "scam": [{"type": "warn"}],
         },
     },
 }
