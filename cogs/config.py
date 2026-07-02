@@ -550,9 +550,9 @@ class SetupView(discord.ui.View):
         self.state = state
         self.guild = guild
 
-    async def render(self, interaction: discord.Interaction) -> None:
+    def _build_step(self, state: SetupState):
         self.clear_items()
-        state = self.state
+        embed: discord.Embed | None = None
 
         if state.step == 0:
             embed = discord.Embed(
@@ -570,7 +570,6 @@ class SetupView(discord.ui.View):
             )
             embed.set_footer(text="Step 1/4 — Click Next to start")
             self.add_item(NavButton("▶️ Next", "next", self))
-            await interaction.edit_original_response(embed=embed, view=self)
 
         elif state.step == 1:
             embed = discord.Embed(
@@ -579,12 +578,10 @@ class SetupView(discord.ui.View):
                 colour=discord.Colour.blue(),
             )
             embed.set_footer(text="Step 1/4 — Pick a channel or keep current")
-            select = ChannelSelect(self.state, self.guild, self)
-            self.add_item(select)
+            self.add_item(ChannelSelect(self.state, self.guild, self))
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(NavButton("Next ▶️", "next", self))
             self.add_item(NavButton("⏭️ Skip (current)", "next", self))
-            await interaction.response.edit_message(embed=embed, view=self)
 
         elif state.step == 2:
             embed = discord.Embed(
@@ -593,11 +590,9 @@ class SetupView(discord.ui.View):
                 colour=discord.Colour.blue(),
             )
             embed.set_footer(text="Step 2/4 — Pick a profile")
-            select = ProfileSelect(self.state, self)
-            self.add_item(select)
+            self.add_item(ProfileSelect(self.state, self))
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(NavButton("Next ▶️", "next", self))
-            await interaction.response.edit_message(embed=embed, view=self)
 
         elif state.step == 3:
             embed = discord.Embed(
@@ -610,7 +605,6 @@ class SetupView(discord.ui.View):
             self.add_item(ToggleButton("dm_author", "✉️ DM author", "Send a DM to the flagged user", self.state, self))
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(NavButton("Next ▶️", "next", self))
-            await interaction.response.edit_message(embed=embed, view=self)
 
         elif state.step == 4:
             embed = discord.Embed(
@@ -621,6 +615,18 @@ class SetupView(discord.ui.View):
             embed.set_footer(text="Step 4/4 — Confirm to apply")
             self.add_item(NavButton("◀️ Back", "prev", self))
             self.add_item(ConfirmButton(self.state, self.guild, self))
+
+        return embed
+
+    async def render_initial(self, interaction: discord.Interaction) -> None:
+        embed = self._build_step(self.state)
+        if embed:
+            await interaction.followup.send(embed=embed, view=self, ephemeral=True)
+
+    async def render(self, interaction: discord.Interaction) -> None:
+        embed = self._build_step(self.state)
+        if embed:
+            await interaction.response.edit_message(embed=embed, view=self)
 
     async def on_timeout(self) -> None:
         gid = self.state.guild_id
@@ -727,7 +733,7 @@ class ConfigSetup(commands.Cog, name="Setup"):
         _wizards[interaction.guild_id] = state
         view = SetupView(state, interaction.guild)
         await interaction.response.defer(ephemeral=True)
-        await view.render(interaction)
+        await view.render_initial(interaction)
 
     @app_commands.command(name="guide", description="Quick overview: what the bot does and how to use it")
     async def guide(self, interaction: discord.Interaction) -> None:

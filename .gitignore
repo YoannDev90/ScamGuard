@@ -21,3 +21,6 @@ venv/
 
 # Per-guild config
 data/
+
+# Logs
+logs/
