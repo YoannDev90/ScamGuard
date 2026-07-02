@@ -35,27 +35,29 @@ ACTION_CHOICES = [
     app_commands.Choice(name="Remove role", value="remove_role"),
     app_commands.Choice(name="Log to channel", value="log"),
 ]
-KNOWN_SETTINGS = [
-    "score_alert", "score_warn", "no_text_bonus",
-    "message_min_length",
-    "image_max_size", "image_download_timeout", "max_ocr_length",
-    "language", "banned_images_threshold", "banned_images_score",
-    "banned_images_dir",
-    "log_channel_names", "alert_channel_id", "ping_role_id",
-    "dm_author_on_alert", "dm_message_template", "auto_delete", "cooldown_seconds",
-    "community_confirm_count", "report_emoji", "enable_report",
-    "reactions", "embed_colors", "embed_dark_red_threshold", "warn_message_default",
-    "debug_mode", "logging_level",
-    "signal_account_age_days", "signal_account_age_score",
-    "signal_join_age_days", "signal_join_age_score",
-    "signal_first_interaction_score",
-    "signal_image_only_score", "signal_no_avatar_score",
-    "signal_crosspost_score", "signal_crosspost_window", "signal_crosspost_min_channels",
-    "url_shorteners", "suspect_tlds",
-    "url_new_domain_days", "url_new_domain_score",
-    "url_shortener_score", "url_ip_score", "url_suspect_tld_score", "url_max_score",
-    "ai_enabled", "ai_model", "ai_score_bonus",
-]
+SETTINGS_TYPES: dict[str, type | tuple] = {
+    "score_alert": int, "score_warn": int, "no_text_bonus": int,
+    "message_min_length": int,
+    "image_max_size": int, "image_download_timeout": int, "max_ocr_length": int,
+    "language": list, "banned_images_threshold": int, "banned_images_score": int,
+    "banned_images_dir": str,
+    "log_channel_names": list, "alert_channel_id": (int, type(None)), "ping_role_id": (int, type(None)),
+    "dm_author_on_alert": bool, "dm_message_template": str, "auto_delete": bool, "cooldown_seconds": int,
+    "community_confirm_count": int, "report_emoji": str, "enable_report": bool,
+    "reactions": dict, "embed_colors": dict, "embed_dark_red_threshold": int, "warn_message_default": str,
+    "debug_mode": bool, "logging_level": str,
+    "signal_account_age_days": int, "signal_account_age_score": int,
+    "signal_join_age_days": int, "signal_join_age_score": int,
+    "signal_first_interaction_score": int,
+    "signal_image_only_score": int, "signal_no_avatar_score": int,
+    "signal_crosspost_score": int, "signal_crosspost_window": int, "signal_crosspost_min_channels": int,
+    "url_shorteners": list, "suspect_tlds": list,
+    "url_new_domain_days": int, "url_new_domain_score": int,
+    "url_shortener_score": int, "url_ip_score": int, "url_suspect_tld_score": int, "url_max_score": int,
+    "ai_enabled": bool, "ai_model": str, "ai_score_bonus": int,
+}
+
+KNOWN_SETTINGS = list(SETTINGS_TYPES.keys())
 
 
 def _parse_value(value: str):
@@ -88,6 +90,53 @@ async def _key_autocomplete(interaction: discord.Interaction, current: str):
 
 def _ec(gc, key: str, default: int) -> int:
     return gc.get("embed_colors", {}).get(key, default)
+
+
+_KW_PER_PAGE = 20
+
+
+class KeywordPageView(discord.ui.View):
+    """Paginated view for keyword listing."""
+
+    def __init__(self, lines: list[str], total: int) -> None:
+        super().__init__(timeout=120)
+        self.lines = lines
+        self.total = total
+        self.page = 0
+        self.max_page = max(0, (len(lines) - 1) // _KW_PER_PAGE)
+        self._update_buttons()
+
+    def _update_buttons(self) -> None:
+        self.prev_button.disabled = self.page == 0
+        self.next_button.disabled = self.page >= self.max_page
+
+    def build_page(self) -> discord.Embed:
+        start = self.page * _KW_PER_PAGE
+        end = start + _KW_PER_PAGE
+        chunk = self.lines[start:end]
+        text = "\n".join(chunk)
+        embed = discord.Embed(
+            title=f"Keywords ({self.total})",
+            description=text or "None",
+            colour=discord.Colour.blue(),
+        )
+        embed.set_footer(text=f"Page {self.page + 1}/{self.max_page + 1}")
+        return embed
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page = max(0, self.page - 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.build_page(), view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page = min(self.max_page, self.page + 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.build_page(), view=self)
+
+    async def on_timeout(self) -> None:
+        self.stop()
 
 
 class Config(commands.Cog, name="Config"):
@@ -185,6 +234,16 @@ class Config(commands.Cog, name="Config"):
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
         parsed = _parse_value(value)
+        expected = SETTINGS_TYPES.get(key)
+        if expected is not None:
+            if isinstance(expected, tuple):
+                if not isinstance(parsed, expected):
+                    names = " or ".join(t.__name__ for t in expected)
+                    await interaction.followup.send(f"`{key}` expects {names}, got `{type(parsed).__name__}`.", ephemeral=True)
+                    return
+            elif not isinstance(parsed, expected):
+                await interaction.followup.send(f"`{key}` expects `{expected.__name__}`, got `{type(parsed).__name__}`.", ephemeral=True)
+                return
         try:
             gc.set(key, parsed)
             embed = discord.Embed(title="Config updated", colour=discord.Colour.green())
@@ -310,11 +369,9 @@ class Config(commands.Cog, name="Config"):
             await interaction.followup.send("No keywords.", ephemeral=True)
             return
         lines = [f"{'✅' if k.get('enabled', True) else '❌'} `{k['word']}` weight={k['weight']} — {k.get('desc', '')}" for k in kw]
-        pag = "\n".join(lines)
-        if len(pag) > 1900:
-            pag = pag[:1900] + "\n..."
-        embed = discord.Embed(title=f"Keywords ({len(kw)})", description=pag, colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        view = KeywordPageView(lines, len(kw))
+        embed = view.build_page()
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @config.command(name="keywords-add", description="Add a keyword")
     @app_commands.default_permissions(manage_guild=True)

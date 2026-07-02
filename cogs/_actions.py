@@ -45,6 +45,27 @@ def _build_alert_embed(message: discord.Message, result: dict, gc=None, *, trigg
     return embed
 
 
+_ACTION_PERMS: dict[str, discord.Permissions] = {
+    "delete": discord.Permissions(manage_messages=True),
+    "kick": discord.Permissions(kick_members=True),
+    "ban": discord.Permissions(ban_members=True),
+    "softban": discord.Permissions(ban_members=True),
+    "timeout": discord.Permissions(moderate_members=True),
+    "add_role": discord.Permissions(manage_roles=True),
+    "remove_role": discord.Permissions(manage_roles=True),
+}
+
+
+def _has_perm(guild: discord.Guild, atype: str) -> bool:
+    need = _ACTION_PERMS.get(atype)
+    if need is None:
+        return True
+    me = guild.me
+    if me is None:
+        return False
+    return me.guild_permissions >= need
+
+
 async def execute_actions(trigger: str, message: discord.Message, result: dict) -> None:
     """Execute all configured actions for a trigger level (guild-specific)."""
     if not message.guild:
@@ -66,6 +87,10 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
 
     for action in actions:
         atype = action.get("type")
+        if not _has_perm(guild, atype):
+            log.warning("Action %s skipped: bot lacks permission guild=%d", atype, guild.id)
+            embed.add_field(name="⚠️ Action skipped", value=f"`{atype}` — bot needs `{atype}` permission", inline=False)
+            continue
         try:
             if atype == "delete":
                 await message.delete()

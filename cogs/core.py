@@ -32,6 +32,7 @@ class Core(commands.Cog, name="Core"):
         await interaction.edit_original_response(content=None, embed=embed)
 
     @app_commands.command(name="test-detect", description="Analyze a message against keywords")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(message_id="Message ID", channel="Channel (default: current)")
     async def test_detect(
         self,
@@ -77,12 +78,17 @@ class Core(commands.Cog, name="Core"):
         embed = discord.Embed(title="Analysis result", colour=colour, timestamp=discord.utils.utcnow())
         embed.add_field(name="Status", value=status, inline=False)
         embed.add_field(name="Score", value=f"**{score}** / threshold {gc.get('score_alert', 50)}", inline=True)
+        embed.add_field(name="Keywords", value=f"**{gc.get('score_warn', 30)}** warn / **{gc.get('score_alert', 50)}** alert", inline=True)
         factors = result.get("factors", [])
         if factors:
-            embed.add_field(name="Factors", value="\n".join(f"- `{f}`" for f in factors), inline=False)
-        embed.add_field(name="Message", value=f"[Jump]({msg.jump_url}) | Author: {msg.author.mention}", inline=False)
+            embed.add_field(name="Factors", value="```\n" + "\n".join(factors[:15]) + "\n```", inline=False)
+        embed.add_field(name="Message", value=f"[Jump]({msg.jump_url}) | {msg.author.mention}", inline=False)
         if result.get("ocr_text"):
             embed.add_field(name="OCR", value=f"```{result['ocr_text'][:500]}```", inline=False)
+        details = result.get("details", "")
+        if details:
+            embed.add_field(name="Details", value=f"```{details[:500]}```", inline=False)
+        embed.set_footer(text=f"ID: {msg.id}")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ── Scan ─────────────────────────────────────────────────────────
@@ -160,6 +166,31 @@ class Core(commands.Cog, name="Core"):
             embed.add_field(name="Errors", value=str(errors), inline=True)
         embed.set_footer(text=f"Limit: {limit}")
         await status.edit(content=None, embed=embed)
+
+
+    # ── Welcome ──────────────────────────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        from core.config import config
+        desc = config.get("welcome_message", f"Merci d'avoir ajouté {self.bot.user.name} ! Utilisez `/setup` pour la configuration rapide ou `/guide` pour l'aide.")
+        embed = discord.Embed(
+            title=f"👋 Merci d'ajouter {self.bot.user.name} !",
+            description=desc,
+            colour=discord.Colour.blue(),
+        )
+        embed.add_field(name="🚀 Quick start", value="`/setup` — Configuration interactive (4 étapes)", inline=False)
+        embed.add_field(name="📖 Guide", value="`/guide` — Vue d'ensemble du bot", inline=True)
+        embed.add_field(name="⚙️ Config", value="`/config show` — Voir la configuration actuelle", inline=True)
+        embed.add_field(name="🛡️ Protection active", value="Le bot analyse automatiquement les messages. Aucune action manuelle requise.", inline=False)
+        embed.set_footer(text="ScamGuard • Questions ? /guide")
+        for channel in guild.text_channels:
+            if channel.permissions_for(guild.me).send_messages:
+                try:
+                    await channel.send(embed=embed)
+                except discord.Forbidden:
+                    pass
+                break
 
 
 async def setup(bot: commands.Bot) -> None:
