@@ -7,4 +7,3 @@ __pycache__
 .env
 data/
 logs/
-banned_images/
