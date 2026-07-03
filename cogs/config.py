@@ -143,12 +143,10 @@ class Config(commands.Cog, name="Config"):
     """Configuration management — per-guild settings, actions, keywords."""
 
     config = app_commands.Group(name="config", description="Manage per-guild configuration")
-
-    # Sub-groups (parent set at creation so __cog_app_commands__ ignores them)
-    _actions = app_commands.Group(name="actions", description="Manage actions", parent=config)
-    _keywords = app_commands.Group(name="keywords", description="Manage keywords", parent=config)
-    _whitelist = app_commands.Group(name="whitelist", description="Manage whitelists", parent=config)
-    _versions = app_commands.Group(name="versions", description="Manage versions", parent=config)
+    actions = app_commands.Group(name="actions", description="Manage actions")
+    keywords = app_commands.Group(name="keywords", description="Manage keywords")
+    whitelist = app_commands.Group(name="whitelist", description="Manage whitelists")
+    versions = app_commands.Group(name="versions", description="Manage versions")
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -285,7 +283,7 @@ class Config(commands.Cog, name="Config"):
 
     # ── Actions ──────────────────────────────────────────────────────
 
-    @_actions.command(name="list", description="List configured actions")
+    @actions.command(name="list", description="List configured actions")
     @app_commands.choices(trigger=TRIGGER_CHOICES)
     async def config_actions_list(self, interaction: discord.Interaction, trigger: str = None) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -304,7 +302,7 @@ class Config(commands.Cog, name="Config"):
         embed.set_footer(text=f"{total} action(s)")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @_actions.command(name="add", description="Add an action")
+    @actions.command(name="add", description="Add an action")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.choices(trigger=TRIGGER_CHOICES, action=ACTION_CHOICES)
     @app_commands.describe(
@@ -349,7 +347,7 @@ class Config(commands.Cog, name="Config"):
             embed.add_field(name="Parameters", value=extra, inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @_actions.command(name="remove", description="Remove an action by index")
+    @actions.command(name="remove", description="Remove an action by index")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.choices(trigger=TRIGGER_CHOICES)
     async def config_actions_remove(self, interaction: discord.Interaction, trigger: str, index: int) -> None:
@@ -361,7 +359,7 @@ class Config(commands.Cog, name="Config"):
             ephemeral=True,
         )
 
-    @_actions.command(name="clear", description="Clear all actions for a trigger")
+    @actions.command(name="clear", description="Clear all actions for a trigger")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.choices(trigger=TRIGGER_CHOICES)
     async def config_actions_clear(self, interaction: discord.Interaction, trigger: str) -> None:
@@ -371,7 +369,7 @@ class Config(commands.Cog, name="Config"):
 
     # ── Keywords ─────────────────────────────────────────────────────
 
-    @_keywords.command(name="list", description="List keywords")
+    @keywords.command(name="list", description="List keywords")
     async def config_keywords_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
@@ -384,7 +382,7 @@ class Config(commands.Cog, name="Config"):
         embed = view.build_page()
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @_keywords.command(name="add", description="Add a keyword")
+    @keywords.command(name="add", description="Add a keyword")
     @app_commands.default_permissions(manage_guild=True)
     async def config_keywords_add(self, interaction: discord.Interaction, word: str, weight: int, desc: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
@@ -392,7 +390,7 @@ class Config(commands.Cog, name="Config"):
         ok = gc.add_keyword(word, weight, desc)
         await interaction.followup.send(f"Keyword `{word}` added." if ok else f"`{word}` already exists.", ephemeral=True)
 
-    @_keywords.command(name="remove", description="Remove a keyword")
+    @keywords.command(name="remove", description="Remove a keyword")
     @app_commands.default_permissions(manage_guild=True)
     async def config_keywords_remove(self, interaction: discord.Interaction, word: str) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -400,7 +398,7 @@ class Config(commands.Cog, name="Config"):
         ok = gc.remove_keyword(word)
         await interaction.followup.send(f"Keyword `{word}` removed." if ok else f"`{word}` not found.", ephemeral=True)
 
-    @_keywords.command(name="toggle", description="Enable/disable a keyword")
+    @keywords.command(name="toggle", description="Enable/disable a keyword")
     @app_commands.default_permissions(manage_guild=True)
     async def config_keywords_toggle(self, interaction: discord.Interaction, word: str) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -446,7 +444,7 @@ class Config(commands.Cog, name="Config"):
 
     # ── Whitelist domains ────────────────────────────────────────────
 
-    @_whitelist.command(name="domain-add", description="Whitelist a domain (bypass URL checks)")
+    @whitelist.command(name="domain-add", description="Whitelist a domain (bypass URL checks)")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.choices(action=[
         app_commands.Choice(name="Add", value="add"),
@@ -468,7 +466,7 @@ class Config(commands.Cog, name="Config"):
             ok = gc.remove_whitelisted_domain(domain)
             await interaction.followup.send(f"Domain `{domain}` removed." if ok else f"`{domain}` not whitelisted.", ephemeral=True)
 
-    @_whitelist.command(name="domains", description="List whitelisted domains")
+    @whitelist.command(name="domains", description="List whitelisted domains")
     async def config_whitelist_domains_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
@@ -480,7 +478,7 @@ class Config(commands.Cog, name="Config"):
         embed = discord.Embed(title=f"Whitelisted domains ({len(domains)})", description="\n".join(lines), colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @_whitelist.command(name="user", description="Add/remove a user whitelisted for /test-detect")
+    @whitelist.command(name="user", description="Add/remove a user whitelisted for /test-detect")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.choices(action=[app_commands.Choice(name="Add", value="add"), app_commands.Choice(name="Remove", value="remove")])
     async def config_whitelist_user(self, interaction: discord.Interaction, action: str, user: discord.User) -> None:
@@ -493,7 +491,7 @@ class Config(commands.Cog, name="Config"):
             ok = gc.remove_whitelisted_user(user.id)
             await interaction.followup.send(f"{user.mention} removed from whitelist." if ok else f"{user.mention} not in whitelist.", ephemeral=True)
 
-    @_whitelist.command(name="users", description="List users whitelisted for /test-detect")
+    @whitelist.command(name="users", description="List users whitelisted for /test-detect")
     async def config_whitelist_users_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
@@ -507,7 +505,7 @@ class Config(commands.Cog, name="Config"):
 
     # ── Versions ─────────────────────────────────────────────────────
 
-    @_versions.command(name="list", description="List configuration versions")
+    @versions.command(name="list", description="List configuration versions")
     async def config_versions_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         gc = get_guild_config(interaction.guild_id)
@@ -521,7 +519,7 @@ class Config(commands.Cog, name="Config"):
         embed.set_footer(text=f"Current version: v{gc.data.get('_version', 0)}")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @_versions.command(name="revert", description="Revert to a previous version")
+    @versions.command(name="revert", description="Revert to a previous version")
     @app_commands.default_permissions(manage_guild=True)
     async def config_versions_revert(self, interaction: discord.Interaction, version: int) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -729,7 +727,7 @@ class SetupView(discord.ui.View):
         elif state.step == 2:
             embed = discord.Embed(
                 title="🛡️ Security profile",
-                description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/config actions add`.",
+                description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/actions add`.",
                 colour=discord.Colour.blue(),
             )
             embed.set_footer(text="Step 2/4 — Pick a profile")
@@ -901,9 +899,9 @@ class ConfigSetup(commands.Cog, name="Setup"):
                 "`/config channel` — Set alert channel\n"
                 "`/config set <key> <value>` — Change any setting\n"
                 "`/config get <key>` — Read a setting\n"
-                "`/config actions add` — Add an action\n"
-                "`/config actions remove` — Remove an action\n"
-                "`/config keywords list` — View scam keywords\n"
+                "`/actions add` — Add an action\n"
+                "`/actions remove` — Remove an action\n"
+                "`/keywords list` — View scam keywords\n"
                 "`/config reset` — Reset guild config"
             ),
             inline=False,
