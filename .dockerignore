@@ -1,0 +1,10 @@
+.venv
+.venv/
+.git
+.git/
+__pycache__
+*.pyc
+.env
+data/
+logs/
+banned_images/

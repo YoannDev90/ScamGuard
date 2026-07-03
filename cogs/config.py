@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Optional
@@ -140,6 +139,49 @@ class KeywordPageView(discord.ui.View):
         self.stop()
 
 
+class ConfigModal(discord.ui.Modal, title="Config value"):
+    def __init__(self, key: str, current, expected: type | tuple) -> None:
+        super().__init__(title=f"Set {key}")
+        self.key = key
+        self.expected = expected
+        label = key[:45]
+        default = str(current) if current is not None else ""
+        kwargs = dict(label=label, default=default, required=True)
+        if expected is bool:
+            self.value = discord.ui.TextInput(**kwargs, placeholder="true / false", max_length=5)
+        elif expected in (int, float):
+            self.value = discord.ui.TextInput(**kwargs, placeholder="Number", max_length=20)
+        elif expected in (list, dict):
+            self.value = discord.ui.TextInput(**kwargs, placeholder="JSON", max_length=2000, style=discord.TextStyle.paragraph)
+        else:
+            self.value = discord.ui.TextInput(**kwargs, max_length=1000)
+        self.add_item(self.value)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        from core.config import get_guild_config
+        gc = get_guild_config(interaction.guild_id)
+        raw = self.value.value.strip()
+        parsed = _parse_value(raw)
+        exp = self.expected
+        if exp is not None:
+            if isinstance(exp, tuple):
+                if not isinstance(parsed, exp):
+                    names = " or ".join(t.__name__ for t in exp)
+                    await interaction.response.send_message(f"`{self.key}` expects {names}, got `{type(parsed).__name__}`.", ephemeral=True)
+                    return
+            elif not isinstance(parsed, exp):
+                await interaction.response.send_message(f"`{self.key}` expects `{exp.__name__}`, got `{type(parsed).__name__}`.", ephemeral=True)
+                return
+        try:
+            gc.set(self.key, parsed)
+            embed = discord.Embed(title="Config updated", colour=discord.Colour.green())
+            embed.add_field(name="Key", value=f"`{self.key}`", inline=True)
+            embed.add_field(name="Value", value=f"```{parsed}```", inline=False)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as exc:
+            await interaction.response.send_message(f"Error: {exc}", ephemeral=True)
+
+
 class Config(commands.Cog, name="Config"):
     """Configuration management — per-guild settings, actions, keywords."""
 
@@ -234,28 +276,12 @@ class Config(commands.Cog, name="Config"):
     @config.command(name="set", description="Update a config value")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.autocomplete(key=_key_autocomplete)
-    async def config_set(self, interaction: discord.Interaction, key: str, value: str) -> None:
-        await interaction.response.defer(ephemeral=True)
+    async def config_set(self, interaction: discord.Interaction, key: str) -> None:
         gc = get_guild_config(interaction.guild_id)
-        parsed = _parse_value(value)
-        expected = SETTINGS_TYPES.get(key)
-        if expected is not None:
-            if isinstance(expected, tuple):
-                if not isinstance(parsed, expected):
-                    names = " or ".join(t.__name__ for t in expected)
-                    await interaction.followup.send(f"`{key}` expects {names}, got `{type(parsed).__name__}`.", ephemeral=True)
-                    return
-            elif not isinstance(parsed, expected):
-                await interaction.followup.send(f"`{key}` expects `{expected.__name__}`, got `{type(parsed).__name__}`.", ephemeral=True)
-                return
-        try:
-            gc.set(key, parsed)
-            embed = discord.Embed(title="Config updated", colour=discord.Colour.green())
-            embed.add_field(name="Key", value=f"`{key}`", inline=True)
-            embed.add_field(name="Value", value=f"```{parsed}```", inline=False)
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as exc:
-            await interaction.followup.send(f"Error: {exc}", ephemeral=True)
+        current = gc.get(key)
+        expected = SETTINGS_TYPES.get(key, str)
+        modal = ConfigModal(key, current, expected)
+        await interaction.response.send_modal(modal)
 
     # ── Alert channel (quick-setup) ──────────────────────────────────
 
@@ -442,6 +468,27 @@ class Config(commands.Cog, name="Config"):
         else:
             await interaction.followup.send(f"{entity.mention} already {'in' if action == 'add' else 'not in'} the list.", ephemeral=True)
 
+    @config.command(name="ignore-list", description="List ignored users, roles and channels")
+    async def config_ignore_list(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        ignored = gc.data.get("ignored", {})
+        lines = []
+        for key, label in [("user_ids", "Users"), ("role_ids", "Roles"), ("channel_ids", "Channels")]:
+            ids = ignored.get(key, [])
+            if not ids:
+                continue
+            mentions = " ".join(
+                f"<@{i}>" if key == "user_ids" else (f"<@&{i}>" if key == "role_ids" else f"<#{i}>")
+                for i in ids
+            )
+            lines.append(f"**{label}:** {mentions}")
+        if not lines:
+            await interaction.followup.send("No ignored entities.", ephemeral=True)
+            return
+        embed = discord.Embed(title="Ignored entities", description="\n".join(lines), colour=discord.Colour(_ec(gc, "config", 0x3498DB)))
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     # ── Whitelist domains ────────────────────────────────────────────
 
     @whitelist.command(name="domain-add", description="Whitelist a domain (bypass URL checks)")
@@ -564,6 +611,8 @@ class Config(commands.Cog, name="Config"):
             return
 
         try:
+            import secrets as _secrets
+            import string as _sstr
             if image:
                 data = await image.read()
             else:
@@ -585,9 +634,8 @@ class Config(commands.Cog, name="Config"):
 
             banned_dir = Path("banned_images")
             banned_dir.mkdir(exist_ok=True)
-            fname = name or f"manual_{interaction.user.id}_{int(time.time())}"
-            safe = "".join(c for c in fname if c.isalnum() or c in "._-") or "image"
-            path = banned_dir / f"{safe}.png"
+            random_name = "".join(_secrets.choice(_sstr.ascii_lowercase + _sstr.digits) for _ in range(12))
+            path = banned_dir / f"{random_name}.png"
             img.save(path, "PNG")
 
             detector = self.bot.get_cog("Monitor")
@@ -604,6 +652,38 @@ class Config(commands.Cog, name="Config"):
         except Exception as exc:
             log.exception("banned-add failed")
             await interaction.followup.send(f"Error: {exc}", ephemeral=True)
+
+    # ── Export / Import ──────────────────────────────────────────────
+
+    @config.command(name="export", description="Export guild config as JSON")
+    @app_commands.default_permissions(manage_guild=True)
+    async def config_export(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        gc = get_guild_config(interaction.guild_id)
+        import io
+        import json
+        data = json.dumps(gc.data, indent=2, ensure_ascii=False)
+        fp = io.BytesIO(data.encode())
+        await interaction.followup.send(file=discord.File(fp, f"scanguard_config_{interaction.guild_id}.json"), ephemeral=True)
+
+    @config.command(name="import", description="Import guild config from a JSON file")
+    @app_commands.default_permissions(manage_guild=True)
+    async def config_import(self, interaction: discord.Interaction, file: discord.Attachment) -> None:
+        await interaction.response.defer(ephemeral=True)
+        try:
+            import json
+            data = json.loads(await file.read())
+            if not isinstance(data, dict) or "guild_id" not in data:
+                await interaction.followup.send("Invalid config file: missing guild_id.", ephemeral=True)
+                return
+            gc = get_guild_config(interaction.guild_id)
+            gc.data = data
+            gc.data["_version"] = gc.data.get("_version", 0) + 1
+            gc._invalidate_cache()
+            gc._save()
+            await interaction.followup.send(f"Config imported — {len(data.get('keywords', []))} keywords, {len(data.get('settings', {}))} settings.", ephemeral=True)
+        except Exception as exc:
+            await interaction.followup.send(f"Import failed: {exc}", ephemeral=True)
 
     # ── Reload ───────────────────────────────────────────────────────
 

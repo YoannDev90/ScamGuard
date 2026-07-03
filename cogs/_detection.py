@@ -410,7 +410,7 @@ class Detector:
 
         try:
             import whois
-            w = await self.bot.loop.run_in_executor(None, lambda: whois.query(domain))
+            w = await self.bot.loop.run_in_executor(None, lambda: whois.query(domain, timeout=30))
             if w and w.creation_date:
                 import datetime as dt
                 creation = w.creation_date

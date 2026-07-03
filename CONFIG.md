@@ -222,7 +222,10 @@ Prompts are in English. litellm handles routing based on the model prefix (`open
 | `/config reset` | Reset guild config | manage_guild |
 | `/config channel [channel]` | Set alert channel | manage_guild |
 | `/config banned-add` | Add banned image (phash) | manage_guild |
-| `/config ignore` | Ignore user/role/channel | manage_guild |
+| `/config ignore` | Add/remove ignore user/role/channel | manage_guild |
+| `/config ignore-list` | List ignored entities | anyone |
+| `/config export` | Export config as JSON | manage_guild |
+| `/config import <file>` | Import config from JSON file | manage_guild |
 
 ### Actions
 
