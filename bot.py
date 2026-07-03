@@ -152,15 +152,6 @@ async def setup_hook() -> None:
     config.load()
     _apply_logging_level()
     await load_cogs()
-    if DEV_GUILD_ID:
-        guild = discord.Object(id=DEV_GUILD_ID)
-        bot.tree.clear_commands(guild=None)
-        bot.tree.clear_commands(guild=guild)
-        await bot.tree.sync(guild=guild)
-        log.info("Commands synced to guild %d (dev mode)", DEV_GUILD_ID)
-    else:
-        await bot.tree.sync()
-        log.info("Global commands synced (may take up to 1h)")
     cmds = list(bot.tree.walk_commands())
     for c in cmds:
         parent = c.parent
@@ -168,8 +159,14 @@ async def setup_hook() -> None:
         while parent:
             path = f"{parent.name} > {path}"
             parent = parent.parent
-        log.debug("  Command: /%s (%s)", path, type(c).__name__)
-    log.info("Total commands in tree: %d", len(cmds))
+        log.debug("  /%s (%s)", path, type(c).__name__)
+    log.info("Commands in tree: %d", len(cmds))
+    if DEV_GUILD_ID:
+        await bot.tree.sync(guild=discord.Object(id=DEV_GUILD_ID))
+        log.info("Synced to guild %d (dev mode)", DEV_GUILD_ID)
+    else:
+        await bot.tree.sync()
+        log.info("Global sync done (propagation may take up to 1h)")
 
     from core.ai_config import ai_config
     ai_config.load()
