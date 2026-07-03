@@ -28,6 +28,14 @@ if not TOKEN:
     print("FATAL: DISCORD_TOKEN not set in .env", file=sys.stderr)
     sys.exit(1)
 
+DEV_GUILD_ID = os.getenv("DEV_GUILD_ID")
+if DEV_GUILD_ID:
+    try:
+        DEV_GUILD_ID = int(DEV_GUILD_ID)
+    except ValueError:
+        print("WARNING: DEV_GUILD_ID is not a valid integer, ignoring")
+        DEV_GUILD_ID = None
+
 
 class ColouredFormatter(logging.Formatter):
     """Formatter that uses colorama for terminal colours."""
@@ -144,9 +152,15 @@ async def setup_hook() -> None:
     config.load()
     _apply_logging_level()
     await load_cogs()
-    await bot.tree.sync()
+    if DEV_GUILD_ID:
+        guild = discord.Object(id=DEV_GUILD_ID)
+        await bot.tree.sync(guild=guild)
+        log.info("Commands synced to guild %d (dev mode, instant)", DEV_GUILD_ID)
+    else:
+        await bot.tree.sync()
+        log.info("Global commands synced (may take up to 1h to propagate)")
     c = len([*bot.tree.walk_commands()])
-    log.info("Slash commands synchronised (%d commands)", c)
+    log.info("Total commands registered: %d", c)
 
     from core.ai_config import ai_config
     ai_config.load()
