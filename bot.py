@@ -83,6 +83,7 @@ logging.getLogger("PIL").setLevel(logging.WARNING)
 logging.getLogger("easyocr").setLevel(logging.WARNING)
 logging.getLogger("torch").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("whois").setLevel(logging.WARNING)
 
 warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
