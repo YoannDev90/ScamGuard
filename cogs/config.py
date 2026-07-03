@@ -11,6 +11,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+from core.commands import config
 from core.config import config as global_cfg
 from core.config import get_guild_config, VersionManager, clear_guild_config_cache
 
@@ -142,7 +143,6 @@ class KeywordPageView(discord.ui.View):
 class Config(commands.Cog, name="Config"):
     """Configuration management — per-guild settings, actions, keywords."""
 
-    config = app_commands.Group(name="config", description="Manage per-guild configuration")
     actions = app_commands.Group(name="actions", description="Manage actions", parent=config)
     keywords = app_commands.Group(name="keywords", description="Manage keywords", parent=config)
     whitelist = app_commands.Group(name="whitelist", description="Manage whitelists", parent=config)
@@ -887,43 +887,27 @@ class ConfigSetup(commands.Cog, name="Setup"):
                 "delete, warn, kick, ban, timeout, or log — depending on your config."
             ),
         )
-        embed.add_field(
-            name="🚀 Quick start",
-            value="Run `/setup` — 4 steps, no IDs needed.",
-            inline=False,
-        )
-        embed.add_field(
-            name="⚙️ Configuration",
-            value=(
-                "`/config show` — View current config\n"
-                "`/config channel` — Set alert channel\n"
-                "`/config set <key> <value>` — Change any setting\n"
-                "`/config get <key>` — Read a setting\n"
-                "`/config actions add` — Add an action\n"
-                "`/config actions remove` — Remove an action\n"
-                "`/config keywords list` — View scam keywords\n"
-                "`/config reset` — Reset guild config"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="🔍 Detection",
-            value=(
-                "**Scam** (score ≥ 50): High-confidence scam — triggers `scam` actions\n"
-                "**Suspicious** (score 30-49): Possible scam — triggers `suspicious` actions\n"
-                "**Banned image** (phash match): Known scam image — triggers `banned_image` actions"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="📌 Permissions needed",
-            value=(
-                "Manage Server users can run `/config` mutations.\n"
-                "The bot needs: View Channels, Send Messages, Read History, "
-                "Manage Messages, Add Reactions, Kick/Ban/Timeout Members, Manage Roles."
-            ),
-            inline=False,
-        )
+        embed.add_field(name="🚀 Quick start", value="Run `/setup` — 4 steps, no IDs needed.", inline=False)
+        embed.add_field(name="⚙️ Configuration", value=(
+            "`/config show` — View current config\n"
+            "`/config channel` — Set alert channel\n"
+            "`/config set <key> <value>` — Change any setting\n"
+            "`/config get <key>` — Read a setting\n"
+            "`/config actions add` — Add an action\n"
+            "`/config actions remove` — Remove an action\n"
+            "`/config keywords list` — View scam keywords\n"
+            "`/config reset` — Reset guild config"
+        ), inline=False)
+        embed.add_field(name="🔍 Detection", value=(
+            "**Scam** (score ≥ 50): High-confidence scam\n"
+            "**Suspicious** (score 30-49): Possible scam\n"
+            "**Banned image** (phash match): Known scam image"
+        ), inline=False)
+        embed.add_field(name="📌 Permissions needed", value=(
+            "Manage Server users can run `/config` mutations.\n"
+            "Bot needs: View Channels, Read History, Send Messages, "
+            "Manage Messages, Add Reactions, Kick/Ban/Timeout Members, Manage Roles."
+        ), inline=False)
         embed.set_footer(text="ScamGuard • Questions? /guide")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
