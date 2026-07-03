@@ -143,13 +143,17 @@ class Config(commands.Cog, name="Config"):
     """Configuration management — per-guild settings, actions, keywords."""
 
     config = app_commands.Group(name="config", description="Manage per-guild configuration")
-    actions = app_commands.Group(name="actions", description="Manage actions")
-    keywords = app_commands.Group(name="keywords", description="Manage keywords")
-    whitelist = app_commands.Group(name="whitelist", description="Manage whitelists")
-    versions = app_commands.Group(name="versions", description="Manage versions")
+    actions = app_commands.Group(name="actions", description="Manage actions", parent=config)
+    keywords = app_commands.Group(name="keywords", description="Manage keywords", parent=config)
+    whitelist = app_commands.Group(name="whitelist", description="Manage whitelists", parent=config)
+    versions = app_commands.Group(name="versions", description="Manage versions", parent=config)
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.config.add_command(self.actions)
+        self.config.add_command(self.keywords)
+        self.config.add_command(self.whitelist)
+        self.config.add_command(self.versions)
 
     # ── Show ─────────────────────────────────────────────────────────
 
