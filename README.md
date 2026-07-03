@@ -42,6 +42,8 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 
 ### Commandes de configuration
 
+Toutes les commandes sont sous `/config` :
+
 | Commande | Description |
 |----------|-------------|
 | `/config show` | Affiche toute la configuration |
@@ -52,21 +54,21 @@ Chaque facteur (keyword, signal, URL, OCR, IA) ajoute son poids. Configurable vi
 | `/config channel [channel]` | Définit le salon d'alerte |
 | `/config banned-add` | Ajoute une image interdite (phash) |
 | `/config ignore` | Ignorer / ne plus ignorer |
-| `/actions list [trigger]` | Liste les actions configurées |
-| `/actions add <trigger> <action>` | Ajoute une action |
-| `/actions remove <trigger> <index>` | Supprime une action |
-| `/actions clear <trigger>` | Vide les actions |
-| `/keywords list` | Liste paginée des mots-clés |
-| `/keywords add <word> <weight> [desc]` | Ajoute un mot-clé |
-| `/keywords remove <word>` | Supprime un mot-clé |
-| `/keywords toggle <word>` | Active/désactive un mot-clé |
-| `/whitelist domain-add <domain>` | Whiteliste un domaine |
-| `/whitelist domain-remove <domain>` | Supprime un domaine |
-| `/whitelist domains` | Liste des domaines whitelistés |
-| `/whitelist user add/remove <user>` | Whiteliste un user (/test-detect) |
-| `/whitelist users` | Liste des users whitelistés |
-| `/versions list` | Historique des versions |
-| `/versions revert <version>` | Revenir à une version |
+| `/config actions list [trigger]` | Liste les actions configurées |
+| `/config actions add <trigger> <action>` | Ajoute une action |
+| `/config actions remove <trigger> <index>` | Supprime une action |
+| `/config actions clear <trigger>` | Vide les actions |
+| `/config keywords list` | Liste paginée des mots-clés |
+| `/config keywords add <word> <weight> [desc]` | Ajoute un mot-clé |
+| `/config keywords remove <word>` | Supprime un mot-clé |
+| `/config keywords toggle <word>` | Active/désactive un mot-clé |
+| `/config whitelist domain-add <domain>` | Whiteliste un domaine |
+| `/config whitelist domain-remove <domain>` | Supprime un domaine |
+| `/config whitelist domains` | Liste des domaines whitelistés |
+| `/config whitelist user` | Whiteliste user (/test-detect) |
+| `/config whitelist users` | Liste des users whitelistés |
+| `/config versions list` | Historique des versions |
+| `/config versions revert <version>` | Revenir à une version |
 
 ### Types d'actions
 

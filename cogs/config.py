@@ -727,7 +727,7 @@ class SetupView(discord.ui.View):
         elif state.step == 2:
             embed = discord.Embed(
                 title="🛡️ Security profile",
-                description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/actions add`.",
+                description="How aggressive should the bot be?\n\n**Aggressive** — Delete + ban + log\n**Balanced** — Delete + timeout + warn + log\n**Gentle** — Warn + log only, no automated bans\n\nYou can customise actions later with `/config actions add`.",
                 colour=discord.Colour.blue(),
             )
             embed.set_footer(text="Step 2/4 — Pick a profile")
@@ -899,9 +899,9 @@ class ConfigSetup(commands.Cog, name="Setup"):
                 "`/config channel` — Set alert channel\n"
                 "`/config set <key> <value>` — Change any setting\n"
                 "`/config get <key>` — Read a setting\n"
-                "`/actions add` — Add an action\n"
-                "`/actions remove` — Remove an action\n"
-                "`/keywords list` — View scam keywords\n"
+                "`/config actions add` — Add an action\n"
+                "`/config actions remove` — Remove an action\n"
+                "`/config keywords list` — View scam keywords\n"
                 "`/config reset` — Reset guild config"
             ),
             inline=False,
