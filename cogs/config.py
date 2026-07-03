@@ -150,10 +150,6 @@ class Config(commands.Cog, name="Config"):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.config.add_command(self.actions)
-        self.config.add_command(self.keywords)
-        self.config.add_command(self.whitelist)
-        self.config.add_command(self.versions)
 
     # ── Show ─────────────────────────────────────────────────────────
 
