@@ -410,13 +410,15 @@ class Detector:
 
         try:
             import whois
-            w = await self.bot.loop.run_in_executor(None, lambda: whois.whois(domain))
-            creation = w.creation_date
-            if isinstance(creation, list):
-                creation = creation[0]
-            if creation:
-                import datetime
-                if isinstance(creation, datetime.datetime):
+            w = await self.bot.loop.run_in_executor(None, lambda: whois.query(domain))
+            if w and w.creation_date:
+                import datetime as dt
+                creation = w.creation_date
+                if isinstance(creation, list):
+                    creation = creation[0]
+                if isinstance(creation, dt.datetime):
+                    if creation.tzinfo is None:
+                        creation = creation.replace(tzinfo=dt.timezone.utc)
                     age = (discord.utils.utcnow() - creation).days
                     _domain_age_cache[domain] = (age, now)
                     return age
