@@ -72,15 +72,14 @@ You can modify `config/settings.json` directly or use `/config set <key> <value>
 | `reactions.suspicious` | `⚠️` | Reaction on suspicious |
 | `reactions.banned_image` | `🛡️` | Reaction on banned image |
 | `reactions.clear` | `✅` | Remove bot reactions |
-| `reactions.community_alert` | `🚨` | Community confidence reaction |
 
-### Community
+### Reporting
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `community_confirm_count` | `3` | Reactions needed for community alert |
-| `report_emoji` | `👮` | Report emoji |
+| `report_emoji` | `👮` | Emoji to report a message |
 | `enable_report` | `true` | Enable report system |
+| `report_score_bonus` | `25` | Score added when a message is reported |
 
 ### User Signals
 
@@ -203,13 +202,13 @@ Prompts are in English. litellm handles routing based on the model prefix (`open
 
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `/config ping` | Bot latency | anyone |
-| `/config guide` | Quick overview | anyone |
-| `/config setup` | Interactive wizard (4 steps) | anyone |
-| `/config test-detect <id>` | Analyze a message | manage_guild or whitelisted |
-| `/config scan [channel] [limit]` | Retroactive scan | manage_guild |
-| `/config stats` | Detection statistics | anyone |
-| `/config stats-reset` | Reset stats | manage_guild |
+| `/ping` | Bot latency | anyone |
+| `/guide` | Quick overview | anyone |
+| `/setup` | Interactive wizard (4 steps) | anyone |
+| `/test-detect <id>` | Analyze a message | manage_guild or whitelisted |
+| `/scan [channel] [limit]` | Retroactive scan | manage_guild |
+| `/stats` | Detection statistics | anyone |
+| `/stats-reset` | Reset stats | manage_guild |
 
 ### Config Management
 

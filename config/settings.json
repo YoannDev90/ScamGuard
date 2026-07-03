@@ -26,8 +26,7 @@
     "scam": "🚨",
     "suspicious": "⚠️",
     "banned_image": "🛡️",
-    "clear": "✅",
-    "community_alert": "🚨"
+    "clear": "✅"
   },
   "embed_colors": {
     "scam": 15158332,
@@ -38,8 +37,8 @@
   },
   "embed_dark_red_threshold": 70,
   "warn_message_default": "Votre message a été signalé.",
-  "community_confirm_count": 3,
   "report_emoji": "👮",
+  "report_score_bonus": 25,
   "enable_report": true,
   "actions": {
     "scam": [{"type": "delete"}, {"type": "ban"}],

@@ -16,6 +16,7 @@ from cogs._actions import execute_actions, _build_alert_embed
 log = logging.getLogger("cogs.monitor")
 
 _COOLDOWN_CLEANUP_INTERVAL = 600
+_reported: set[int] = set()
 
 
 class Monitor(commands.Cog, name="Monitor"):
@@ -39,11 +40,13 @@ class Monitor(commands.Cog, name="Monitor"):
         self._last_cooldown_cleanup = now
 
     async def _batch_cleanup(self, message: discord.Message) -> None:
-        """Delete recent messages from the same author across all visible channels."""
+        """Delete recent messages from the same author across visible channels (max 10)."""
         uid = message.author.id
         total = 0
         ch_count = 0
         for channel in message.guild.text_channels:
+            if ch_count >= 10:
+                break
             if not channel.permissions_for(message.guild.me).manage_messages:
                 continue
             ch_count += 1
@@ -54,18 +57,17 @@ class Monitor(commands.Cog, name="Monitor"):
                         found.append(msg)
                 if not found:
                     continue
-                count = len(found)
-                for i in range(0, count, 100):
+                for i in range(0, len(found), 100):
                     batch = found[i:i + 100]
                     if len(batch) == 1:
                         await batch[0].delete()
                     else:
                         await channel.delete_messages(batch)
                     await asyncio.sleep(0.5)
-                total += count
+                total += len(found)
             except (discord.Forbidden, discord.HTTPException):
                 pass
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(1)
         if total:
             log.info("Batch cleanup: deleted %d msgs from user %d in %d channels", total, uid, ch_count)
 
@@ -192,7 +194,7 @@ class Monitor(commands.Cog, name="Monitor"):
         else:
             log.debug("Alert skip (cooldown) user=%d msg=%d", uid, message.id)
 
-    # ── Community reaction system ────────────────────────────────────
+    # ── Community reactions ──────────────────────────────────────────
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
@@ -208,30 +210,39 @@ class Monitor(commands.Cog, name="Monitor"):
         except discord.NotFound:
             return
 
+        # Clear bot reactions
         reactions_cfg = gc.get("reactions", {})
-        clear_emoji = reactions_cfg.get("clear", "\u2705")
-
-        if emoji == clear_emoji:
+        if emoji == reactions_cfg.get("clear", "\u2705"):
             for r in msg.reactions:
                 if r.me:
-                    async for u in r.users():
-                        if u == self.bot.user:
-                            await r.remove(u)
-                            break
+                    try:
+                        await r.remove(self.bot.user)
+                    except (discord.HTTPException, discord.Forbidden):
+                        pass
 
-        alert_emoji = reactions_cfg.get("community_alert", "\U0001f6a8")
-        if emoji == alert_emoji:
-            count = sum(1 for r in msg.reactions if str(r.emoji) == alert_emoji and r.count > 1)
-            if count >= gc.get("community_confirm_count", 3):
-                result = {"score": 99, "is_scam": True, "factors": ["Community confirmed"]}
+        # Report system — re-analyze with bonus score
+        if not gc.get("enable_report", True):
+            return
+        report_emoji = gc.get("report_emoji", "\U0001f46e")
+        if emoji != report_emoji:
+            return
+        if msg.id in _reported:
+            return
+        _reported.add(msg.id)
+
+        bonus = gc.get("report_score_bonus", 25)
+        try:
+            result = await self.detector.analyze_message(msg, gc)
+            result["score"] += bonus
+            result["factors"].append(f"Report +{bonus}")
+            if result["score"] >= gc.get("score_alert", 50):
+                result["is_scam"] = True
                 await execute_actions("scam", msg, result)
                 await self._send_alert(msg, result, gc)
-
-        report_emoji = gc.get("report_emoji", "\U0001f46e")
-        if gc.get("enable_report", True) and emoji == report_emoji and not any(r.me for r in msg.reactions if str(r.emoji) == report_emoji):
-            result = {"score": 50, "is_scam": True, "factors": [f"Reported by <@{payload.user_id}>"]}
-            await execute_actions("scam", msg, result)
-            await self._send_alert(msg, result, gc)
+            else:
+                log.info("Report: msg=%d score=%d (under threshold)", msg.id, result["score"])
+        except Exception:
+            log.debug("Report analysis failed for msg=%d", msg.id)
 
 
 async def setup(bot: commands.Bot) -> None:
