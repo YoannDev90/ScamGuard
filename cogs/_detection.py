@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import hashlib
 import io
+import ipaddress
+import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -63,7 +67,8 @@ def _ocr_cache_get(key: str) -> Optional[str]:
 def _ocr_cache_set(key: str, text: str) -> None:
     _MEMO_OCR[key] = text
     if len(_MEMO_OCR) > _MEMO_OCR_MAX:
-        _MEMO_OCR.clear()
+        for _ in range(100):
+            _MEMO_OCR.pop(next(iter(_MEMO_OCR)))
     _OCR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     (_OCR_CACHE_DIR / f"{key}.txt").write_text(text, encoding="utf-8")
 
@@ -116,20 +121,21 @@ def _prune_caches() -> None:
     stale_domains = [d for d, (_, ts) in _domain_age_cache.items() if now - ts > _DOMAIN_CACHE_TTL]
     for d in stale_domains:
         del _domain_age_cache[d]
-    if len(_domain_age_cache) > _DOMAIN_CACHE_MAX:
-        _domain_age_cache.clear()
-    # Resolve: cap size
-    if len(_resolve_cache) > _RESOLVE_CACHE_MAX:
-        _resolve_cache.clear()
-    # OCR memo: cap size
-    if len(_MEMO_OCR) > _MEMO_OCR_MAX:
-        _MEMO_OCR.clear()
+    while len(_domain_age_cache) > _DOMAIN_CACHE_MAX:
+        _domain_age_cache.pop(next(iter(_domain_age_cache)))
+    # Resolve: cap size (pop oldest)
+    while len(_resolve_cache) > _RESOLVE_CACHE_MAX:
+        _resolve_cache.pop(next(iter(_resolve_cache)))
+    # OCR memo: cap size (pop oldest)
+    while len(_MEMO_OCR) > _MEMO_OCR_MAX:
+        _MEMO_OCR.pop(next(iter(_MEMO_OCR)))
     # Crosspost: prune expired
     stale = [h for h, entries in _crosspost.items() if all(now - t > 3600 for _, t in entries)]
     for h in stale:
         del _crosspost[h]
-    if len(_crosspost) > _CROSSPOST_MAX:
-        _crosspost.clear()
+    # Cap crosspost
+    while len(_crosspost) > _CROSSPOST_MAX:
+        _crosspost.pop(next(iter(_crosspost)))
 
 
 class Detector:
@@ -354,7 +360,6 @@ class Detector:
         score = gc.get("url_ip_score", 20)
         if score and total < max_total:
             try:
-                import ipaddress
                 ipaddress.ip_address(domain)
                 factors.append((f"url_ip_{domain}", score))
                 total += score
@@ -412,7 +417,6 @@ class Detector:
             import whois
             w = await self.bot.loop.run_in_executor(None, lambda: whois.query(domain, timeout=30))
             if w and w.creation_date:
-                import datetime as dt
                 creation = w.creation_date
                 if isinstance(creation, list):
                     creation = creation[0]
@@ -502,7 +506,6 @@ class Detector:
             log.debug("AI: model '%s' or its provider not found in config", model_name)
             return None
 
-        import os
         api_key = os.environ.get(pc.env_key)
         if not api_key:
             log.debug("AI: env var '%s' not set for provider '%s'", pc.env_key, mc.provider)
@@ -510,7 +513,6 @@ class Detector:
 
         try:
             import litellm
-            import json as _json
             litellm_model = f"{mc.provider}/{mc.model}"
 
             if mc.endpoint_type == "moderations":
@@ -540,7 +542,7 @@ class Detector:
             m = _JSON_RE.search(raw)
             if m:
                 raw = m.group(0)
-            parsed = _json.loads(raw)
+            parsed = json.loads(raw)
             if parsed.get("scam"):
                 log.info("AI flagged scam: %s", parsed.get("reason", ""))
                 return bonus

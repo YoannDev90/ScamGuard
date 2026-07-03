@@ -71,17 +71,6 @@ class ConfigManager:
         self.settings: dict = {}
         self._loaded = False
 
-    def _load_json(self, path: Path) -> dict:
-        if path.exists():
-            with open(path) as f:
-                return json.load(f)
-        return {}
-
-    def _save_json(self, path: Path, data: dict) -> None:
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        log.info("Saved %s", path.name)
-
     def load(self) -> None:
         kw_path = self._dir / "keywords.json"
         settings_path = self._dir / "settings.json"
@@ -89,12 +78,16 @@ class ConfigManager:
         old = self._dir / "patterns.json"
         if old.exists() and not kw_path.exists():
             shutil.copy(old, old.with_suffix(".json.legacy"))
-            self._save_json(kw_path, {"keywords": _DEFAULT_KEYWORDS})
+            _save_json(kw_path, {"keywords": _DEFAULT_KEYWORDS})
             log.warning("Migrated old patterns -> keywords (backup: patterns.json.legacy)")
 
-        data = self._load_json(kw_path)
+        data = _load_json(kw_path)
         self._keywords = data.get("keywords", [])
-        self.settings = self._load_json(settings_path)
+        if not self._keywords:
+            _save_json(kw_path, {"keywords": _DEFAULT_KEYWORDS})
+            self._keywords = list(_DEFAULT_KEYWORDS)
+            log.info("Wrote default keywords to %s", kw_path)
+        self.settings = _load_json(settings_path)
         self._loaded = True
         log.info("Config loaded: %d keywords, %d settings", len(self._keywords), len(self.settings))
 
@@ -103,10 +96,6 @@ class ConfigManager:
         if not self._loaded:
             self.load()
         return self._keywords
-
-    @property
-    def raw_keywords(self) -> list[dict]:
-        return self.keywords
 
     def get(self, key: str, default=None):
         if not self._loaded:
@@ -299,7 +288,7 @@ class GuildConfig:
     def get_keywords(self) -> list[dict]:
         if self.data.get("keywords"):
             return self.data["keywords"]
-        return config.raw_keywords
+        return config.keywords
 
     def get_compiled_keywords(self) -> list[tuple[str, int, str]]:
         if self._compiled_keywords is not None:
@@ -345,7 +334,7 @@ class GuildConfig:
                 self._invalidate_cache()
                 self._save()
                 return k["enabled"]
-        for k in config.raw_keywords:
+        for k in config.keywords:
             if k["word"] == word:
                 VersionManager(self).snapshot()
                 entry = dict(k)
@@ -443,6 +432,7 @@ class GuildConfig:
             elif key == "keywords" and isinstance(value, list):
                 self.data["keywords"] = value
             elif key == "reset" and value:
+                VersionManager(self).snapshot()
                 self.data = {
                     "guild_id": self.guild_id,
                     "_version": self.data.get("_version", 0) + 1,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Optional
 
@@ -119,7 +120,6 @@ async def execute_actions(trigger: str, message: discord.Message, result: dict) 
                 log.warning("Action: softban %d guild=%d", member.id, guild.id)
 
             elif atype == "timeout":
-                import datetime
                 duration = action.get("duration", 60)
                 await member.timeout(datetime.timedelta(minutes=duration), reason=reason)
                 log.info("Action: timeout %d (%d min) guild=%d", member.id, duration, guild.id)

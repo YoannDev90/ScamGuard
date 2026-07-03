@@ -43,7 +43,7 @@ SETTINGS_TYPES: dict[str, type | tuple] = {
     "banned_images_dir": str,
     "log_channel_names": list, "alert_channel_id": (int, type(None)), "ping_role_id": (int, type(None)),
     "dm_author_on_alert": bool, "auto_delete": bool, "cooldown_seconds": int,
-    "community_confirm_count": int, "report_emoji": str, "enable_report": bool,
+    "report_emoji": str, "enable_report": bool, "report_score_bonus": int,
     "reactions": dict, "embed_colors": dict, "embed_dark_red_threshold": int, "warn_message_default": str,
     "debug_mode": bool, "logging_level": str,
     "signal_account_age_days": int, "signal_account_age_score": int,
@@ -673,15 +673,20 @@ class Config(commands.Cog, name="Config"):
         try:
             import json
             data = json.loads(await file.read())
-            if not isinstance(data, dict) or "guild_id" not in data:
-                await interaction.followup.send("Invalid config file: missing guild_id.", ephemeral=True)
-                return
+            if not isinstance(data, dict):
+                raise ValueError("Root must be a JSON object")
+            for required in ("guild_id", "settings", "keywords", "actions"):
+                if required not in data:
+                    raise ValueError(f"Missing required field: '{required}'")
+            if not isinstance(data["settings"], dict) or not isinstance(data["keywords"], list) or not isinstance(data["actions"], dict):
+                raise ValueError("settings, keywords, and actions must have correct types")
             gc = get_guild_config(interaction.guild_id)
+            data["guild_id"] = interaction.guild_id
+            data["_version"] = gc.data.get("_version", 0) + 1
             gc.data = data
-            gc.data["_version"] = gc.data.get("_version", 0) + 1
             gc._invalidate_cache()
             gc._save()
-            await interaction.followup.send(f"Config imported — {len(data.get('keywords', []))} keywords, {len(data.get('settings', {}))} settings.", ephemeral=True)
+            await interaction.followup.send(f"Config imported — {len(data['keywords'])} keywords, {len(data['settings'])} settings.", ephemeral=True)
         except Exception as exc:
             await interaction.followup.send(f"Import failed: {exc}", ephemeral=True)
 
@@ -694,7 +699,7 @@ class Config(commands.Cog, name="Config"):
         try:
             global_cfg.reload()
             clear_guild_config_cache()
-            kw_count = len(global_cfg.raw_keywords)
+            kw_count = len(global_cfg.keywords)
             await interaction.followup.send(
                 f"Config reloaded — {kw_count} global keywords.",
                 ephemeral=True,

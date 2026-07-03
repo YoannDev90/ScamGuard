@@ -41,11 +41,11 @@ Complete configuration reference → **[CONFIG.md](CONFIG.md)**
 | `/config actions add <trigger> <type>` | Add auto-action |
 | `/config keywords list` | List detection keywords |
 | `/config channel` | Set alert channel |
-| `/config test-detect <id>` | Test detection on a message |
-| `/config scan` | Scan recent messages |
-| `/config stats` | Detection statistics |
-| `/config setup` | Interactive configuration wizard |
-| `/config guide` | Overview and help |
+| `/test-detect <id>` | Test detection on a message |
+| `/scan` | Scan recent messages |
+| `/stats` | Detection statistics |
+| `/setup` | Interactive configuration wizard |
+| `/guide` | Overview and help |
 
 ## Requirements
 
