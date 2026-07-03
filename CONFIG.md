@@ -101,6 +101,7 @@ You can modify `config/settings.json` directly or use `/config set <key> <value>
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `trusted_domains` | `["discord.com","youtube.com",...]` | Skipped for all URL checks |
 | `url_shorteners` | `["bit.ly","tinyurl.com",...]` | Known shortener domains |
 | `suspect_tlds` | `[".xyz",".top",".gq",...]` | Suspicious TLDs |
 | `url_new_domain_days` | `30` | Domain age threshold |

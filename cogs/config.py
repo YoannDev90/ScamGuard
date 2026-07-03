@@ -52,7 +52,7 @@ SETTINGS_TYPES: dict[str, type | tuple] = {
     "signal_first_interaction_score": int,
     "signal_image_only_score": int, "signal_no_avatar_score": int,
     "signal_crosspost_score": int, "signal_crosspost_window": int, "signal_crosspost_min_channels": int,
-    "url_shorteners": list, "suspect_tlds": list,
+    "url_shorteners": list, "suspect_tlds": list, "trusted_domains": list,
     "url_new_domain_days": int, "url_new_domain_score": int,
     "url_shortener_score": int, "url_ip_score": int, "url_suspect_tld_score": int, "url_max_score": int,
     "ai_enabled": bool, "ai_model": str, "ai_score_bonus": int,

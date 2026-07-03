@@ -290,6 +290,7 @@ class Detector:
             return factors
 
         whitelisted = gc.get_whitelisted_domains()
+        trusted = gc.get("trusted_domains", [])
         shorteners = gc.get("url_shorteners", [])
         suspect_tlds = gc.get("suspect_tlds", [])
         max_total = gc.get("url_max_score", 50)
@@ -309,7 +310,7 @@ class Detector:
                 if domain in seen_domains:
                     continue
                 seen_domains.add(domain)
-                if domain in whitelisted:
+                if domain in whitelisted or domain in trusted:
                     continue
 
                 total = sum(s for _, s in factors)

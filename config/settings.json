@@ -69,6 +69,8 @@
   "url_suspect_tld_score": 10,
   "url_max_score": 50,
 
+  "trusted_domains": ["discord.com", "discordapp.com", "discord.gg", "discordapp.net", "discordcdn.com", "cdn.discordapp.com", "cdn.discord.com", "media.discordapp.net", "tenor.com", "giphy.com", "youtube.com", "youtu.be", "twitch.tv", "twitter.com", "x.com", "github.com", "gitlab.com", "google.com"],
+
   "ai_enabled": false,
   "ai_model": "gpt-4o-mini",
   "ai_score_bonus": 30
